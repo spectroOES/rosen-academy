@@ -16,7 +16,7 @@ st.markdown(
     .stMainBlockContainer {padding:0 !important; max-width:none !important;}
     .stMainBlockContainer > div {gap:0 !important;}
     header[data-testid="stHeader"] {background:transparent; height:0;}
-    [data-testid="stAppViewContainer"] {background:#f4f7f8;}
+    [data-testid="stAppViewContainer"] {background:#fff;}
     iframe {display:block; border:0;}
     </style>""", unsafe_allow_html=True,
 )

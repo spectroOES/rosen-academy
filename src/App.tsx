@@ -186,10 +186,10 @@ export default function App() {
     exportCSV(rows, `rosen-${line.element}-${line.wavelength.toFixed(3)}-calibration.csv`);
   }
 
-  return <div className="app-shell" id="top">
+  return <div className="app-shell" id="top" data-theme="lexicon">
     <header className="topbar">
       <a className="brand" href="#top" aria-label="Rosen Academy home"><span className="brand-mark"><Activity size={25} strokeWidth={2.1}/></span><span>ROSEN<span className="brand-light"> ACADEMY</span><small>ANALYTICAL SCIENCE, IN PRACTICE</small></span></a>
-      <div className="topbar-middle"><span className="topbar-divider"/>ICP-OES Simulator<span className="version-tag">BETA 0.1</span></div>
+      <div className="topbar-middle"><span className="topbar-divider"/>ICP-OES Simulator<span className="version-tag">LEXICON</span></div>
       <button className="help-button" onClick={() => setHelpOpen(true)}><CircleHelp size={17}/>Lab guide</button>
     </header>
     <nav className="workflow" aria-label="Workflow"><span className="workflow-active"><span className="step-number">01</span> Calibration</span><span className="workflow-future"><span className="step-number">02</span> Verification <span className="soon">COMING NEXT</span></span><span className="workflow-future"><span className="step-number">03</span> Samples</span><span className="training-label"><FlaskConical size={14}/>Synthetic training data</span></nav>
@@ -201,7 +201,7 @@ export default function App() {
           <label className="field-label" htmlFor="element">Analyte</label>
           <div className="select-wrap"><select id="element" disabled={isBusy} value={line.element} onChange={e => changeLine(LINES.find(l => l.element === e.target.value)!.id)}>{ELEMENTS.map(element => <option key={element} value={element}>{element} — {ELEMENT_NAMES[element]}</option>)}</select><ChevronDown size={15}/></div>
           <div className="field-heading"><span className="field-label">Analytical line</span><span>nm</span></div>
-          <div className="line-options" role="group" aria-label="Analytical line">{LINES.filter(l => l.element === line.element).map(l => <button key={l.id} className={`line-option ${l.id === lineId ? 'selected' : ''}`} disabled={isBusy} aria-pressed={l.id === lineId} onClick={() => changeLine(l.id)}><span className="radio-indicator">{l.id === lineId && <span/>}</span><span className="line-info"><strong>{l.element} {l.wavelength.toFixed(3)}</strong><small>{l.label}</small></span><span className="sensitivity-bars" aria-hidden="true">{[0, 1, 2, 3].map((_, i) => <i key={i} style={{ height: 5 + i * 4, opacity: i < Math.max(1, Math.ceil(l.sensitivity / Math.max(...LINES.filter(v => v.element === line.element).map(v => v.sensitivity)) * 4)) ? 1 : 0.2 }}/>)}</span></button>)}</div>
+          <div className="line-options" role="group" aria-label="Analytical line">{LINES.filter(l => l.element === line.element).map(l => <button key={l.id} className={`line-option ${l.id === lineId ? 'selected' : ''}`} disabled={isBusy} aria-pressed={l.id === lineId} onClick={() => changeLine(l.id)}><span className="radio-indicator">{l.id === lineId && <span/>}</span><span className="line-info"><strong>{l.element} {l.wavelength.toFixed(3)}</strong><small>{l.label}</small></span><span className="sensitivity-bars" aria-hidden="true">{[0, 1, 2, 3].map((_, i) => <i key={i} style={{ height: 5 + i * 4, background: i < Math.max(1, Math.ceil(l.sensitivity / Math.max(...LINES.filter(v => v.element === line.element).map(v => v.sensitivity)) * 4)) ? 'currentColor' : 'transparent', border: '1px solid currentColor' }}/>)}</span></button>)}</div>
           <p className="line-description">{line.description}</p>
           <div className="method-separator"/>
           <label className="field-label" htmlFor="response-model">Response model</label>

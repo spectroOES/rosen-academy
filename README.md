@@ -6,6 +6,10 @@ An interactive educational instrument for exploring ICP-OES calibration. The ent
 
 ## Streamlit: persistent browser link
 
+Live app: [Rosen Academy ICP-OES simulator](https://rosen-academy-3v6duxmcsbzvmerc3s52mk.streamlit.app/).
+
+The **LEXICON** visual theme uses black text on white panels and bright green/white on black instrument displays.
+
 The Streamlit entrypoint is **`streamlit_app.py`**. The existing English React laboratory is embedded unchanged, including its calibration model, CSV downloads, and browser-local session storage.
 
 For Streamlit Community Cloud:
@@ -25,7 +29,7 @@ The hosting server does not need Node.js: a deliberate, verified deployment bund
 npm run build:streamlit
 ```
 
-Commit both source changes and `streamlit_assets/`, then push to the deployed branch. Community Cloud pulls the update. Open sessions check for a changed release every two seconds and refresh only when necessary; normal polling does not interrupt measurements. Community Cloud may take additional time to process a GitHub update or restart the app.
+Commit both source changes and `streamlit_assets/`, then push to the deployed branch. Community Cloud pulls the update. Open sessions check for a changed release every two seconds and refresh only when necessary; normal polling does not interrupt measurements. Community Cloud may take additional time to process a GitHub update or restart the app. After the update is processed, reload the existing app URL if needed. If an old version remains, the app owner can use **Manage app → Reboot app**. Keep the same app and URL; no new deployment needs to be created for an ordinary update.
 
 ### Streamlit development locally
 
