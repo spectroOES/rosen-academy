@@ -60,9 +60,13 @@ export interface FitPoint {
 export interface FitResult {
   slope: number;
   intercept: number;
+  forcing: 'none' | 'blank';
+  anchorId: string | null;
+  freeParameters: 1 | 2;
+  observationCount: number;
   /** Unweighted 1 - SSE/SST, even for a weighted fit. */
   r2: number;
-  /** Unweighted residual standard error, cps; n - 2 degrees of freedom. */
+  /** Unweighted residual SE, cps; n - freeParameters degrees of freedom. */
   residualSE: number;
   /** Relative concentration error (%), nonzero standards, k - 2 df. */
   relativeSE: number | null;
@@ -90,6 +94,7 @@ export function rsd(values: number[]): number | null {
 
 export interface WeightPoint {
   id: string;
+  role: 'fit' | 'anchor';
   sd: number | null;
   rsd: number | null;
   /** Literal, unnormalized regression weight; no inverse-variance substitution. */
@@ -99,6 +104,8 @@ export interface WeightPoint {
 export interface WeightResult {
   points: WeightPoint[];
   error: string | null;
+  forcing: 'none' | 'blank';
+  anchor: { id: string; intensity: number } | null;
 }
 
 /**
@@ -110,14 +117,15 @@ export interface WeightResult {
  */
 export function calculateWeights(standards: Standard[], weighting: Weighting): WeightResult {
   const measured = standards.filter((standard) => standard.included && standard.readings.length > 0);
-  const positiveConcentrations = measured
-    .map((standard) => standard.concentration)
-    .filter((value) => Number.isFinite(value) && value > 0);
-  const minimumPositive = Math.min(...positiveConcentrations);
+  const forcing = weighting === '1/x' || weighting === '1/x2' ? 'blank' : 'none';
+  const blanks = measured.filter((standard) => standard.concentration === 0);
   const precision = weighting === '1/SD' || weighting === '1/RSD';
-  let error: string | null = null;
+  let error: string | null = forcing === 'blank' && blanks.length !== 1
+    ? `${weighting} weighting requires exactly one included, measured calibration blank to anchor the fit.`
+    : null;
+  let anchor: WeightResult['anchor'] = null;
   const points = measured.map((standard): WeightPoint => {
-    const point: WeightPoint = { id: standard.id, sd: null, rsd: null, weight: null };
+    const point: WeightPoint = { id: standard.id, role: forcing === 'blank' && standard.concentration === 0 ? 'anchor' : 'fit', sd: null, rsd: null, weight: null };
     const fail = (reason: string) => {
       error ??= `${standard.name}: ${reason}`;
       return point;
@@ -136,6 +144,10 @@ export function calculateWeights(standards: Standard[], weighting: Weighting): W
         point.rsd = relative;
       }
     }
+    if (point.role === 'anchor') {
+      if (blanks.length === 1) anchor = { id: standard.id, intensity: average };
+      return point;
+    }
     if (precision) {
       if (standard.readings.length < 2) return fail(`${weighting} weighting requires at least 2 replicate readings.`);
       if (point.sd === null || point.sd <= 0) return fail(`${weighting} weighting requires a positive replicate SD.`);
@@ -144,9 +156,7 @@ export function calculateWeights(standards: Standard[], weighting: Weighting): W
     } else if (weighting === 'none') {
       point.weight = 1;
     } else {
-      if (!Number.isFinite(minimumPositive)) return fail(`${weighting} weighting requires at least one positive concentration.`);
-      const concentration = Math.max(standard.concentration, minimumPositive);
-      point.weight = weighting === '1/x2' ? 1 / concentration ** 2 : 1 / concentration;
+      point.weight = weighting === '1/x2' ? 1 / standard.concentration ** 2 : 1 / standard.concentration;
     }
     if (!Number.isFinite(point.weight) || point.weight <= 0) {
       point.weight = null;
@@ -154,41 +164,57 @@ export function calculateWeights(standards: Standard[], weighting: Weighting): W
     }
     return point;
   });
-  return { points, error };
+  return { points, error, forcing, anchor };
 }
 
 /**
  * Fit standard mean responses. Each standard has one regression weight.
- * For inverse-concentration weights, blank concentration is floored at the
- * lowest positive included concentration: w = 1 / max(x, xmin)^power.
+ * Legacy Qtegra 1/concentration and 1/concentration² behavior excludes the
+ * blank from weighted observations and fixes the intercept to its measured
+ * mean intensity (Forcing = Blank). No numeric blank weight or floor is used.
  * Precision weights use measured sample SD or measured RSD (%) directly.
- * The free intercept is never forced through zero.
+ * None and precision modes retain a free intercept.
  */
 export function fitCalibration(standards: Standard[], weighting: Weighting): FitResult | null {
   const measured = standards.filter((standard) => standard.included && standard.readings.length > 0);
   if (measured.length < 3 || new Set(measured.map((standard) => standard.concentration)).size < 3) return null;
   if (measured.some((standard) => !Number.isFinite(standard.concentration) || standard.concentration < 0 || standard.readings.some((value) => !Number.isFinite(value)))) return null;
   const weights = calculateWeights(standards, weighting);
-  if (weights.error || weights.points.some((point) => point.weight === null)) return null;
-  const maximumWeight = Math.max(...weights.points.map((point) => point.weight!));
+  const numericWeights = weights.points.filter((point) => point.role === 'fit');
+  if (weights.error || numericWeights.some((point) => point.weight === null)) return null;
+  if (weights.forcing === 'blank' && !weights.anchor) return null;
+  const weightById = new Map(numericWeights.map((point) => [point.id, point.weight!]));
+  const maximumWeight = Math.max(...numericWeights.map((point) => point.weight!));
   if (!Number.isFinite(maximumWeight) || maximumWeight <= 0) return null;
-  const observations = measured.map((standard, index) => ({
+  const observations = measured.filter((standard) => weightById.has(standard.id)).map((standard) => ({
     standard,
     x: standard.concentration,
     y: mean(standard.readings),
     // A common normalization preserves the literal WLS objective while
     // avoiding overflow in sums. Diagnostic weights above remain raw.
-    weight: weights.points[index].weight! / maximumWeight,
+    weight: weightById.get(standard.id)! / maximumWeight,
   }));
   if (observations.some((point) => !Number.isFinite(point.weight) || point.weight <= 0)) return null;
-  const totalWeight = observations.reduce((sum, point) => sum + point.weight, 0);
-  const xMean = observations.reduce((sum, point) => sum + point.weight * point.x, 0) / totalWeight;
-  const yMean = observations.reduce((sum, point) => sum + point.weight * point.y, 0) / totalWeight;
-  const xx = observations.reduce((sum, point) => sum + point.weight * (point.x - xMean) ** 2, 0);
-  const xy = observations.reduce((sum, point) => sum + point.weight * (point.x - xMean) * (point.y - yMean), 0);
-  if (!(xx > 0) || !Number.isFinite(xx) || !Number.isFinite(xy)) return null;
-  const slope = xy / xx;
-  const intercept = yMean - slope * xMean;
+  const freeParameters = weights.forcing === 'blank' ? 1 : 2;
+  if (observations.length <= freeParameters) return null;
+  let slope: number;
+  let intercept: number;
+  if (weights.forcing === 'blank') {
+    intercept = weights.anchor!.intensity;
+    const xx = observations.reduce((sum, point) => sum + point.weight * point.x ** 2, 0);
+    const xy = observations.reduce((sum, point) => sum + point.weight * point.x * (point.y - intercept), 0);
+    if (!(xx > 0) || !Number.isFinite(xx) || !Number.isFinite(xy)) return null;
+    slope = xy / xx;
+  } else {
+    const totalWeight = observations.reduce((sum, point) => sum + point.weight, 0);
+    const xMean = observations.reduce((sum, point) => sum + point.weight * point.x, 0) / totalWeight;
+    const yMean = observations.reduce((sum, point) => sum + point.weight * point.y, 0) / totalWeight;
+    const xx = observations.reduce((sum, point) => sum + point.weight * (point.x - xMean) ** 2, 0);
+    const xy = observations.reduce((sum, point) => sum + point.weight * (point.x - xMean) * (point.y - yMean), 0);
+    if (!(xx > 0) || !Number.isFinite(xx) || !Number.isFinite(xy)) return null;
+    slope = xy / xx;
+    intercept = yMean - slope * xMean;
+  }
   if (!Number.isFinite(slope) || !Number.isFinite(intercept) || Math.abs(slope) < Number.EPSILON) return null;
   const points: FitPoint[] = observations.map(({ standard, x, y }) => {
     const predictedSignal = intercept + slope * x;
@@ -208,14 +234,21 @@ export function fitCalibration(standards: Standard[], weighting: Weighting): Fit
   const sst = points.reduce((sum, point) => sum + (point.signal - averageSignal) ** 2, 0);
   if (!(sst > 0) || !Number.isFinite(sse) || !Number.isFinite(sst)) return null;
   const relativePoints = points.filter((point) => point.relativeError !== null);
+  // Preserve the simulator's existing relative-error diagnostic denominator
+  // k - 2 (two-term linear model), including legacy blank-forced fits. This is
+  // not a claim of reproducing a vendor-specific historical RSE calculation.
   const relativeSE = relativePoints.length > 2
     ? Math.sqrt(relativePoints.reduce((sum, point) => sum + point.relativeError! ** 2, 0) / (relativePoints.length - 2))
     : null;
   return {
     slope,
     intercept,
+    forcing: weights.forcing,
+    anchorId: weights.anchor?.id ?? null,
+    freeParameters,
+    observationCount: observations.length,
     r2: 1 - sse / sst,
-    residualSE: Math.sqrt(sse / (points.length - 2)),
+    residualSE: Math.sqrt(sse / (points.length - freeParameters)),
     relativeSE,
     points,
   };

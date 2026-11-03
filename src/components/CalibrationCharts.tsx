@@ -1,13 +1,14 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { expectedSignal, mean } from '../lib/model';
-import type { FitResult, ResponseMode, SpectralLine, Standard } from '../lib/model';
+import type { FitResult, ResponseMode, SpectralLine, Standard, Weighting } from '../lib/model';
 
 type Props = {
   standards: Standard[];
   fit: FitResult | null;
   line: SpectralLine;
   mode: ResponseMode;
+  weighting: Weighting;
   selectedId: string | null;
   onSelect: (id: string) => void;
 };
@@ -53,7 +54,7 @@ function niceTicks(min: number, max: number, count = 5): number[] {
   return ticks;
 }
 
-export function CalibrationCharts({ standards, fit, line, mode, selectedId, onSelect }: Props) {
+export function CalibrationCharts({ standards, fit, line, mode, weighting, selectedId, onSelect }: Props) {
   const [logX, setLogX] = useState(false);
   const [showModel, setShowModel] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -72,6 +73,11 @@ export function CalibrationCharts({ standards, fit, line, mode, selectedId, onSe
   const errorPlotW = errorW - errorLeft - errorRight;
   const id = useId().replace(/:/g, '');
   const measured = standards.filter((standard) => standard.readings.length > 0);
+  const concentrationWeighting = weighting === '1/x' || weighting === '1/x2';
+  const measuredBlankAnchor = concentrationWeighting
+    ? measured.find((standard) => standard.included && standard.concentration === 0)
+    : undefined;
+  const anchorId = (fit?.forcing === 'blank' ? fit.anchorId : null) ?? measuredBlankAnchor?.id ?? null;
   const visible = measured.filter((standard) => !logX || standard.concentration > 0);
   const positive = standards.map((standard) => standard.concentration).filter((value) => value > 0);
   const xMax = Math.max(...positive, 0.01);
@@ -98,6 +104,8 @@ export function CalibrationCharts({ standards, fit, line, mode, selectedId, onSe
   const hoverX = hovered ? xScale(hovered.concentration) : 0;
   const hoverY = hovered ? yScale(mean(hovered.readings)) : 0;
   const tooltipWidth = Math.min(310, W - 20);
+  const hoveredAnchor = hovered !== undefined && hovered.id === anchorId;
+  const tooltipHeight = hoveredAnchor ? 106 : 62;
   const residualPoints = useMemo(() => fit?.points.filter((point) => point.concentration > 0 && point.relativeError !== null && Number.isFinite(point.relativeError)) ?? [], [fit]);
   const residualMax = Math.max(15, ...residualPoints.map((point) => Math.abs(point.relativeError!))) * 1.16;
   const residualY = (value: number) => 103 - (value / residualMax) * 70;
@@ -132,10 +140,12 @@ export function CalibrationCharts({ standards, fit, line, mode, selectedId, onSe
         .calibration-charts .chart-card .chart-legend { display: flex; align-items: center; flex-wrap: wrap; gap: 17px; border-top: 1px solid ${GRID}; padding: 13px 24px; font-size: 14px; font-weight: 600; color: ${WHITE}; background: ${BLACK}; }
         .calibration-charts .chart-legend span { display: inline-flex; align-items: center; gap: 7px; }
         .calibration-charts .legend-dot { width: 8px; height: 8px; background: ${GREEN}; border-radius: 50%; display: inline-block; }
+        .calibration-charts .legend-anchor { width: 11px; height: 11px; background: ${GREEN}; border: 2px solid ${WHITE}; box-shadow: inset 0 0 0 2px ${BLACK}; display: inline-block; }
         .calibration-charts .legend-line { width: 20px; height: 0; border-top: 2px solid ${GREEN}; display: inline-block; }
         .calibration-charts .chart-card .chart-footnote { margin: 0; padding: 12px 24px 16px; color: ${WHITE}; font-size: 14px; font-weight: 600; line-height: 1.6; background: ${BLACK}; }
         .calibration-charts .chart-point { cursor: pointer; outline: none; }
         .calibration-charts .chart-point:focus-visible circle:last-child { stroke: ${YELLOW}; stroke-width: 3px; }
+        .calibration-charts .chart-point:focus-visible .anchor-marker { stroke: ${YELLOW}; stroke-width: 3px; }
         .calibration-charts .chart-card .residual-caption { font-size: 14px; font-weight: 700; color: ${GREEN}; white-space: nowrap; }
         @container (max-width: 620px) {
           .calibration-charts .card-heading { flex-wrap: wrap; gap: 10px; }
@@ -180,11 +190,14 @@ export function CalibrationCharts({ standards, fit, line, mode, selectedId, onSe
           <g clipPath={`url(#${id}-clip)`}>
             {showModel && <path d={path((value) => expectedSignal(value, line, mode))} fill="none" stroke={YELLOW} strokeWidth="1.8" strokeDasharray="5 5" />}
             {fit && <path d={path((value) => fit.intercept + fit.slope * value)} fill="none" stroke={GREEN} strokeWidth="2.5" />}
-            {visible.map((standard) => <g key={standard.id} role="button" tabIndex={0} className="chart-point" aria-label={`Select ${standard.name}, ${standard.concentration} ppm, ${compact(mean(standard.readings))} cps${standard.included ? '' : ', excluded from fit'}`} onClick={() => onSelect(standard.id)} onKeyDown={(event) => selectByKey(event, standard.id)} onMouseEnter={() => setHoveredId(standard.id)} onMouseLeave={() => setHoveredId(null)} onFocus={() => setHoveredId(standard.id)} onBlur={() => setHoveredId(null)}>
-              <title>{standard.name}: {standard.concentration} ppm; mean {mean(standard.readings).toFixed(2)} cps{standard.included ? '' : ' (excluded)'}</title>
+            {visible.map((standard) => <g key={standard.id} role="button" tabIndex={0} className="chart-point" aria-label={`Select ${standard.name}, ${standard.concentration} ppm, ${compact(mean(standard.readings))} cps${standard.id === anchorId ? ', blank anchor; excluded from regression weights' : standard.included ? '' : ', excluded from fit'}`} onClick={() => onSelect(standard.id)} onKeyDown={(event) => selectByKey(event, standard.id)} onMouseEnter={() => setHoveredId(standard.id)} onMouseLeave={() => setHoveredId(null)} onFocus={() => setHoveredId(standard.id)} onBlur={() => setHoveredId(null)}>
+              <title>{standard.name}: {standard.concentration} ppm; mean {mean(standard.readings).toFixed(2)} cps{standard.id === anchorId ? ' (Blank anchor; excluded from regression weights)' : standard.included ? '' : ' (excluded)'}</title>
               <circle cx={xScale(standard.concentration)} cy={yScale(mean(standard.readings))} r="13" fill="transparent" />
               {selectedId === standard.id && <circle cx={xScale(standard.concentration)} cy={yScale(mean(standard.readings))} r="10" fill="none" stroke={WHITE} strokeWidth="1.8" />}
-              <circle cx={xScale(standard.concentration)} cy={yScale(mean(standard.readings))} r={selectedId === standard.id ? 5 : 4.5} fill={standard.included ? GREEN : BLACK} stroke={standard.included ? BLACK : WHITE} strokeWidth="1.8" />
+              {standard.id === anchorId ? <>
+                <rect className="anchor-marker" x={xScale(standard.concentration) - 6} y={yScale(mean(standard.readings)) - 6} width="12" height="12" fill={BLACK} stroke={WHITE} strokeWidth="2" />
+                <rect x={xScale(standard.concentration) - 2} y={yScale(mean(standard.readings)) - 2} width="4" height="4" fill={GREEN} />
+              </> : <circle cx={xScale(standard.concentration)} cy={yScale(mean(standard.readings))} r={selectedId === standard.id ? 5 : 4.5} fill={standard.included ? GREEN : BLACK} stroke={standard.included ? BLACK : WHITE} strokeWidth="1.8" />}
             </g>)}
           </g>
           {visible.length === 0 && !showModel && <g>
@@ -194,20 +207,22 @@ export function CalibrationCharts({ standards, fit, line, mode, selectedId, onSe
             </text>
             <text x={(LEFT + W - RIGHT) / 2} y={(TOP + BOTTOM) / 2 + (PLOT_W < 410 ? 27 : 13)} textAnchor="middle" fill={WHITE} fontSize="14">{PLOT_W < 410 ? 'Your curve will appear here' : 'Acquired signals and the fitted line will appear here'}</text>
           </g>}
-          {hovered && <g pointerEvents="none" transform={`translate(${Math.max(10, Math.min(hoverX - 75, W - tooltipWidth - 10))},${Math.max(TOP + 2, hoverY - 74)})`}>
-            <rect width={tooltipWidth} height="62" rx="2" fill={BLACK} stroke={GREEN} strokeWidth="2" />
+          {hovered && <g pointerEvents="none" transform={`translate(${Math.max(10, Math.min(hoverX - 75, W - tooltipWidth - 10))},${Math.max(TOP + 2, hoverY - tooltipHeight - 12)})`}>
+            <rect width={tooltipWidth} height={tooltipHeight} rx="2" fill={BLACK} stroke={GREEN} strokeWidth="2" />
             <text x="11" y="23" fill={WHITE} fontSize="14" fontWeight="600">{hovered.name} <tspan fill={GREEN} fontWeight="600">· {hovered.concentration} ppm</tspan></text>
             <text x="11" y="45" fill={WHITE} fontSize="14">{mean(hovered.readings).toFixed(2)} cps{hovered.included ? '' : ' · excluded'}</text>
+            {hoveredAnchor && <text x="11" y="67" fill={GREEN} fontSize="14" aria-label="Blank anchor; excluded from regression weights"><tspan x="11">Blank anchor; excluded from </tspan><tspan x="11" dy="20">regression weights</tspan></text>}
           </g>}
         </svg>
         </div>
         <div className="chart-legend">
           <span><i className="legend-dot" />Measured standard</span>
           <span><i className="legend-line" />Linear fit</span>
+          {anchorId !== null && <span title="The measured blank fixes the intercept and is excluded from regression weights."><i className="legend-anchor" />Blank anchor</span>}
           {measured.some((standard) => !standard.included) && <span><i className="legend-dot" style={{ background: BLACK, border: `2px solid ${WHITE}` }} />Excluded from fit</span>}
           {showModel && <span><i className="legend-line" style={{ borderColor: YELLOW, borderTopStyle: 'dashed' }} />Synthetic response model</span>}
         </div>
-        {logX && <p className="chart-footnote">The zero-concentration blank is hidden on the log axis. Its inclusion in the regression is unchanged.</p>}
+        {logX && <p className="chart-footnote">The zero-concentration blank is hidden on the log axis. {anchorId !== null ? 'It still fixes the intercept and is excluded from regression weights.' : concentrationWeighting ? 'An enabled, measured blank is required to fix the intercept.' : 'Its regression role is unchanged.'}</p>}
       </section>
 
       <section className="chart-card" aria-label="Back-calculated concentration errors">

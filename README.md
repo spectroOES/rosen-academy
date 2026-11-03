@@ -84,7 +84,7 @@ Download `dist/rosen-academy.html` and open it directly in Chrome, Edge, or Fire
 - Editable standards from **0.01 to 100 ppm**, plus a zero-concentration calibration blank. Here ppm denotes mg/L in the simulated aqueous solutions.
 - Linear response, detector compression/saturation, and smoothly curved response.
 - 3, 5, or 10 repeat measurements; 1, 5, or 10 s integration with accelerated acquisition playback.
-- Standard means, sample SD, RSD, free-intercept weighted linear regression, back-calculated concentrations, and error plots.
+- Standard means, sample SD, RSD, weighted linear regression with a free or legacy blank-fixed intercept, back-calculated concentrations, and error plots.
 - Optional display of the underlying synthetic response curve, distinct from the fitted straight line.
 - Browser-local session persistence and CSV export containing raw replicate data and calculation metadata.
 - Locally bundled fonts: no remote font or analytics requests.
@@ -103,7 +103,7 @@ The nonlinear modes generate nonlinear instrument response; the calibration rema
 
 Replicates use seeded Gaussian noise combining electronic, photon/background, and proportional contributions, scaled by `1 / sqrt(integration time)`. Net blank signals may be negative. Blank RSD is normally labelled **n/a**, because percentages around zero are not informative. In **1/RSD** mode its calculated numerical value is shown with **†**, because it contributes to the selected weighting; the warning about instability remains visible.
 
-Regression uses each included standard's mean as one observation, with a free intercept, and minimizes `sum(w_i * (mean_signal_i − intercept − slope * concentration_i)^2)`. At least three distinct included, measured concentrations are required.
+Regression uses each included standard's mean as an observation and minimizes `sum(w_i * (mean_signal_i − intercept − slope * concentration_i)^2)`. Unconstrained fits require at least three distinct included, measured concentrations. Legacy concentration-weighted fits require an included measured blank plus at least two distinct nonzero measured concentrations.
 
 | Option | Literal coefficient `w_i` |
 | --- | --- |
@@ -113,14 +113,14 @@ Regression uses each included standard's mean as one observation, with a free in
 | 1/SD | `1 / sample SD of replicate net intensities (cps)` |
 | 1/RSD | `1 / RSD (%)`, with `RSD = 100 * sample SD / abs(mean net intensity)` |
 
-For **1/x and 1/x² only**, zero concentration is replaced with the lowest positive included concentration **for the weight calculation only**. For precision modes, each included measured standard requires at least two replicates and a finite, positive sample SD (`n − 1` denominator). **1/RSD** additionally requires a nonzero measured mean. Undefined weights produce an explicit error: the simulator does not drop the standard, invent a floor, or revert to an unweighted fit. The user can acquire valid readings or explicitly exclude that standard.
+For **1/x and 1/x²**, the documented **Qtegra legacy** behavior is used: the measured included blank mean fixes the intercept (**Forcing = Blank**), the blank has no numeric weight, and only nonzero standards enter the weighted slope calculation. The blank Weight cell displays **ANCHOR**. No substitute concentration is used. Missing, excluded, unmeasured or ambiguous blanks produce a clear error. The slope is `sum(w*c*(mean_signal − blank_mean)) / sum(w*c²)`. Other options retain a free intercept. For precision modes, each included measured standard requires at least two replicates and a finite, positive sample SD (`n − 1` denominator). **1/RSD** additionally requires a nonzero measured mean. Undefined weights produce an explicit error: the simulator does not drop the standard, invent a floor, or revert to an unweighted fit. The user can acquire valid readings or explicitly exclude that standard.
 
 Precision weights are literal **1/SD and 1/RSD**, not inverse variances, and do not use the standard error of the mean. They use replicate net intensity rather than calculated concentrations. A nonzero observed blank mean permits a mathematical 1/RSD coefficient, but this coefficient is unstable near zero. Raw coefficients are shown in the **Weight** column and CSV; the regression rescales all weights by one common factor for numerical stability, which leaves the fit unchanged.
 
-**Vendor-algorithm status:** these transparent educational definitions have not been verified against Qtegra documentation. They should not be presented as a reproduction of Qtegra's algorithms until the relevant manual sections are available and compared, including SD/RSD basis, blank handling, and regression diagnostics.
+**Vendor-algorithm status:** legacy inverse-concentration weighting and automatic blank forcing are verified against the supplied Qtegra manual and the 2.25 change notes. See [source references, formulas and scope](docs/qtegra-legacy-calibration.md). The existing literal 1/SD and 1/RSD options are educational choices; Qtegra Absolute SD and Relative SD use squared inverse-deviation weights. The simulator does not claim complete historical Qtegra statistics compatibility.
 
-- R² is `1 − SSE/SST` with **unweighted** SSE, including for weighted fits. It may be negative for a weighted fit.
-- Residual SE is `sqrt(SSE / (n − 2))`, in cps, using included standard means.
+- R² is `1 − SSE/SST` with **unweighted** SSE over numerical fit observations, including for weighted fits. It may be negative for a weighted fit and is not presented as the revised Qtegra 2.25 Pearson R.
+- Residual SE is `sqrt(SSE / (n − p))`, in cps, over numerical fit observations; p=1 for a blank-fixed intercept and p=2 for a free line. The blank anchor is excluded from n in legacy concentration-weighted fits.
 - Relative concentration SE is `sqrt(sum(relative concentration error in % squared) / (k − 2))`, where `k` is the count of included nonzero standards. It is undefined for `k <= 2`.
 - Back-calculated concentration is `(mean signal − intercept) / slope`.
 - Estimated instrumental LOD and LOQ are `3 s / slope` and `10 s / slope`, where `s` is the **sample SD of at least 10 included blank readings**. A positive slope is required. These are not validated method limits; an unsuitable calibration also biases these estimates.

@@ -47,14 +47,14 @@ test('starts empty, fits demo data, and refits without reacquiring signals', asy
   await expect(page.locator('.equation')).not.toHaveText(unweightedEquation);
   expect(await readings(page)).toEqual(originalReadings);
   expect(await page.locator('.standards-table tbody tr td:nth-child(4)').allTextContents()).toEqual(originalMeans);
-  await expect(page.getByText(/Blank weight uses the lowest included nonzero concentration/)).toBeVisible();
+  await expect(page.getByText(/Qtegra legacy: Forcing = Blank/)).toBeVisible();
 
   const weightedEquation = await page.locator('.equation').innerText();
   await page.getByRole('checkbox', { name: 'Include Standard 5', exact: true }).uncheck();
   await expect(page.locator('.equation')).not.toHaveText(weightedEquation);
   expect(await readings(page)).toEqual(originalReadings);
   expect((await session(page)).standards.at(-1)?.included).toBe(false);
-  await expect(page.getByText(/5 included levels/)).toBeVisible();
+  await expect(page.getByText(/4 weighted levels \+ blank anchor/)).toBeVisible();
 });
 
 test('changing the analytical line, response, or integration clears incompatible measurements', async ({ page }) => {

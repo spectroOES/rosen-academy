@@ -20,25 +20,23 @@ describe('regression and reporting', () => {
     expect(fit.points[2].backCalculated).toBeCloseTo(0.1, 10);
   });
 
-  it('matches independently calculated OLS and WLS reference answers', () => {
+  it('matches an independently calculated free-intercept OLS reference', () => {
     // References from the normal equations for x=[1,2,4], y=[1,2,3].
     const data = standards([1, 2, 4], [1, 2, 3]);
     const ols = fitCalibration(data, 'none')!;
     expect(ols.slope).toBeCloseTo(9 / 14, 12);
     expect(ols.intercept).toBeCloseTo(0.5, 12);
-    const inverse = fitCalibration(data, '1/x')!;
-    expect(inverse.slope).toBeCloseTo(9 / 13, 12);
-    expect(inverse.intercept).toBeCloseTo(5 / 13, 12);
-    const inverseSquared = fitCalibration(data, '1/x2')!;
-    expect(inverseSquared.slope).toBeCloseTo(3 / 4, 12);
-    expect(inverseSquared.intercept).toBeCloseTo(2 / 7, 12);
+    expect(ols.forcing).toBe('none');
+    expect(ols.anchorId).toBeNull();
+    expect(ols.freeParameters).toBe(2);
+    expect(ols.observationCount).toBe(3);
   });
 
-  it('uses the lowest positive concentration as a finite blank-weight floor', () => {
+  it('uses a blank anchor without assigning a numeric blank weight', () => {
     const fit = fitCalibration(standards([0, 1, 2], [1, 2, 4]), '1/x2')!;
-    // Weights [1,1,1/4], centered WLS normal-equation solution.
-    expect(fit.slope).toBeCloseTo(4 / 3, 12);
-    expect(fit.intercept).toBeCloseTo(8 / 9, 12);
+    // Fixed b=1; positive weights [1,1/4]. m=(1+1.5)/(1+1).
+    expect(fit.slope).toBeCloseTo(5 / 4, 12);
+    expect(fit.intercept).toBe(1);
     expect(Number.isFinite(fit.r2)).toBe(true);
   });
 
@@ -67,6 +65,114 @@ describe('regression and reporting', () => {
     expect(rsd([1, 2, 3])).toBe(50);
     expect(rsd([-1, 0, 1])).toBeNull();
     expect(rsd([1])).toBeNull();
+  });
+});
+
+describe('legacy Qtegra inverse-concentration weighting', () => {
+  function anchoredStandards() {
+    const data = standards([0, 1, 2, 4], [2, 5, 8, 11]);
+    data[0].name = 'Calibration blank';
+    return data;
+  }
+
+  it('matches independent constrained-fit references with a nonzero measured blank', () => {
+    const data = anchoredStandards();
+    for (const weighting of ['1/x', '1/x2'] as const) {
+      const diagnostics = calculateWeights(data, weighting);
+      expect(diagnostics.error).toBeNull();
+      expect(diagnostics.forcing).toBe('blank');
+      expect(diagnostics.anchor).toEqual({ id: data[0].id, intensity: 2 });
+      expect(diagnostics.points[0]).toEqual({ id: data[0].id, role: 'anchor', sd: null, rsd: null, weight: null });
+      expect(diagnostics.points.slice(1).every((point) => point.role === 'fit')).toBe(true);
+      expect(diagnostics.points.slice(1).map((point) => point.weight)).toEqual(weighting === '1/x' ? [1, 1 / 2, 1 / 4] : [1, 1 / 4, 1 / 16]);
+      const fit = fitCalibration(data, weighting)!;
+      // Hand calculations for b=2: 1/c => 18/7; 1/c² => (3+3+9/4)/3.
+      expect(fit.slope).toBeCloseTo(weighting === '1/x' ? 18 / 7 : 11 / 4, 12);
+      expect(fit.intercept).toBe(2);
+      expect(fit.forcing).toBe('blank');
+      expect(fit.anchorId).toBe(data[0].id);
+      expect(fit.freeParameters).toBe(1);
+      expect(fit.observationCount).toBe(3);
+      expect(fit.points.map((point) => point.id)).toEqual(data.slice(1).map((point) => point.id));
+      // At c=0 the fitted response is exactly the measured blank mean.
+      expect(fit.intercept + fit.slope * 0).toBe(mean(data[0].readings));
+      const sse = fit.points.reduce((sum, point) => sum + point.residual ** 2, 0);
+      expect(fit.residualSE).toBeCloseTo(Math.sqrt(sse / 2), 12);
+      const average = mean(fit.points.map((point) => point.signal));
+      const sst = fit.points.reduce((sum, point) => sum + (point.signal - average) ** 2, 0);
+      expect(fit.r2).toBeCloseTo(1 - sse / sst, 12);
+    }
+  });
+
+  it('uses only the blank mean as the intercept constraint, independent of blank precision', () => {
+    const data = anchoredStandards();
+    for (const weighting of ['1/x', '1/x2'] as const) {
+      const original = fitCalibration(data, weighting)!;
+      const sameMean = structuredClone(data);
+      sameMean[0].readings = [-98, 2, 102];
+      const differentPrecision = fitCalibration(sameMean, weighting)!;
+      expect(differentPrecision.slope).toBeCloseTo(original.slope, 12);
+      expect(differentPrecision.intercept).toBe(original.intercept);
+      sameMean[0].readings = [2, 3, 4];
+      const changedMean = fitCalibration(sameMean, weighting)!;
+      expect(changedMean.intercept).toBe(3);
+      expect(changedMean.slope).toBeCloseTo(weighting === '1/x' ? 15 / 7 : 13 / 6, 12);
+    }
+  });
+
+  it('rejects missing, excluded, unmeasured, and duplicate measured blank anchors', () => {
+    const data = anchoredStandards();
+    const missing = data.slice(1);
+    const excluded = data.map((point) => point.concentration === 0 ? { ...point, included: false } : point);
+    const unmeasured = data.map((point) => point.concentration === 0 ? { ...point, readings: [] } : point);
+    const duplicate = [...data, { ...data[0], id: 'second-blank', name: 'Second blank' }];
+    for (const weighting of ['1/x', '1/x2'] as const) {
+      for (const invalid of [missing, excluded, unmeasured, duplicate]) {
+        const diagnostics = calculateWeights(invalid, weighting);
+        expect(diagnostics.error).toMatch(/exactly one included, measured calibration blank/);
+        expect(diagnostics.anchor).toBeNull();
+        expect(fitCalibration(invalid, weighting)).toBeNull();
+      }
+    }
+  });
+
+  it('accepts a negative measured blank and requires two nonzero levels beyond the anchor', () => {
+    const data = standards([0, 1, 2], [-2, 1, 4]);
+    for (const weighting of ['1/x', '1/x2'] as const) {
+      const fit = fitCalibration(data, weighting)!;
+      expect(fit.intercept).toBe(-2);
+      expect(fit.slope).toBeCloseTo(3, 12);
+      expect(fit.observationCount).toBe(2);
+      expect(fit.residualSE).toBeCloseTo(0, 12);
+      expect(fit.relativeSE).toBeNull();
+      expect(fitCalibration(data.slice(0, 2), weighting)).toBeNull();
+    }
+  });
+
+  it('honors excluded outliers and maps numeric weights by id when the blank is out of order', () => {
+    const data = anchoredStandards();
+    const outlier = { id: 'outlier', name: 'Excluded outlier', concentration: 100, included: false, readings: [1e9] };
+    for (const weighting of ['1/x', '1/x2'] as const) {
+      const expected = fitCalibration(data, weighting)!;
+      const reordered = fitCalibration([data[1], outlier, data[2], data[0], data[3]], weighting)!;
+      expect(reordered.slope).toBeCloseTo(expected.slope, 12);
+      expect(reordered.intercept).toBe(expected.intercept);
+      expect(reordered.points).toHaveLength(3);
+    }
+  });
+
+  it('changes blank-based detection-limit estimates through the constrained slope', () => {
+    const data = anchoredStandards();
+    data[0].readings = [1, 3, 1, 3, 1, 3, 1, 3, 2, 2];
+    const blankSD = Math.sqrt(8 / 9);
+    const inverse = fitCalibration(data, '1/x')!;
+    const squared = fitCalibration(data, '1/x2')!;
+    const inverseLimits = estimatedLimits(data, inverse)!;
+    const squaredLimits = estimatedLimits(data, squared)!;
+    expect(inverseLimits.count).toBe(10);
+    expect(inverseLimits.lod).toBeCloseTo(3 * blankSD / (18 / 7), 12);
+    expect(squaredLimits.loq).toBeCloseTo(10 * blankSD / (11 / 4), 12);
+    expect(inverseLimits.lod).not.toBeCloseTo(squaredLimits.lod, 5);
   });
 });
 
@@ -109,7 +215,7 @@ describe('literal replicate-precision weighting', () => {
   it('uses the actual measured blank mean for RSD and does not use a concentration floor', () => {
     const data = precisionStandards();
     const result = calculateWeights(data, '1/RSD');
-    expect(result.points[0]).toEqual({ id: data[0].id, sd: 1, rsd: 50, weight: 0.02 });
+    expect(result.points[0]).toEqual({ id: data[0].id, role: 'fit', sd: 1, rsd: 50, weight: 0.02 });
     expect(result.points[0].weight).not.toBe(result.points[1].weight);
     data[0].readings = [-3, -2, -1];
     const negativeBlank = calculateWeights(data, '1/RSD');
@@ -133,7 +239,7 @@ describe('literal replicate-precision weighting', () => {
     data[0].readings = [-1, 0, 1];
     const invalid = calculateWeights(data, '1/RSD');
     expect(invalid.error).toMatch(/Calibration blank.*nonzero mean/);
-    expect(invalid.points[0]).toEqual({ id: data[0].id, sd: 1, rsd: null, weight: null });
+    expect(invalid.points[0]).toEqual({ id: data[0].id, role: 'fit', sd: 1, rsd: null, weight: null });
     expect(fitCalibration(data, '1/RSD')).toBeNull();
     expect(calculateWeights(data, '1/SD').error).toBeNull();
     expect(fitCalibration(data, '1/SD')).not.toBeNull();
@@ -146,7 +252,7 @@ describe('literal replicate-precision weighting', () => {
       const incomplete = calculateWeights(partial, weighting);
       expect(incomplete.error).toMatch(/Standard 2.*at least 2 replicate/);
       expect(incomplete.points).toHaveLength(4);
-      expect(incomplete.points[2]).toEqual({ id: partial[2].id, sd: null, rsd: null, weight: null });
+      expect(incomplete.points[2]).toEqual({ id: partial[2].id, role: 'fit', sd: null, rsd: null, weight: null });
       expect(fitCalibration(partial, weighting)).toBeNull();
       partial[2].readings = [8, 8, 8];
       const zeroSD = calculateWeights(partial, weighting);
