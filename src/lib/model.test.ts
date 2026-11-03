@@ -176,7 +176,7 @@ describe('legacy Qtegra inverse-concentration weighting', () => {
   });
 });
 
-describe('literal replicate-precision weighting', () => {
+describe('Qtegra inverse-variance precision weighting', () => {
   function precisionStandards(): Standard[] {
     const data = standards([0, 1, 2, 4], [2, 5, 8, 11]);
     [1, 2, 1, 4].forEach((deviation, index) => {
@@ -187,38 +187,36 @@ describe('literal replicate-precision weighting', () => {
     return data;
   }
 
-  it('uses sample SD and literal reciprocals, matching independent normal-equation references', () => {
+  it('uses squared precision weights, matching independent normal-equation references', () => {
     const data = precisionStandards();
-    const inverseSD = calculateWeights(data, '1/SD');
+    const inverseSD = calculateWeights(data, '1/SD2');
     expect(inverseSD.error).toBeNull();
     expect(inverseSD.points.map((point) => point.sd)).toEqual([1, 2, 1, 4]);
-    expect(inverseSD.points.map((point) => point.weight)).toEqual([1, 0.5, 1, 0.25]);
-    // Exact rational normal-equation results for w=[1,1/2,1,1/4].
-    const fitSD = fitCalibration(data, '1/SD')!;
-    expect(fitSD.slope).toBeCloseTo(222 / 89, 12);
-    expect(fitSD.intercept).toBeCloseTo(211 / 89, 12);
-    // Inverse variance would give 1050/377, so this distinguishes 1/SD
-    // from a silent 1/SD² substitution.
-    expect(fitSD.slope).not.toBeCloseTo(1050 / 377, 5);
+    expect(inverseSD.points.map((point) => point.weight)).toEqual([1, 1 / 4, 1, 1 / 16]);
+    // Exact normal-equation results for w=[1,1/4,1,1/16].
+    const fitSD = fitCalibration(data, '1/SD2')!;
+    expect(fitSD.slope).toBeCloseTo(1050 / 377, 12);
+    expect(fitSD.intercept).toBeCloseTo(811 / 377, 12);
+    expect(fitSD.slope).not.toBeCloseTo(222 / 89, 5);
 
-    const inverseRSD = calculateWeights(data, '1/RSD');
+    const inverseRSD = calculateWeights(data, '1/RSD2');
     expect(inverseRSD.error).toBeNull();
-    const weights = [1 / 50, 1 / 40, 2 / 25, 11 / 400];
+    const weights = [4, 25 / 4, 64, 121 / 16];
     inverseRSD.points.forEach((point, index) => expect(point.weight).toBeCloseTo(weights[index], 12));
-    // Exact references for the raw percent-RSD weights above.
-    const fitRSD = fitCalibration(data, '1/RSD')!;
-    expect(fitRSD.slope).toBeCloseTo(5766 / 2615, 12);
-    expect(fitRSD.intercept).toBeCloseTo(7837 / 2615, 12);
-    expect(fitRSD.slope).not.toBeCloseTo(84030 / 39263, 5);
+    // Exact references for inverse squared fractional relative SD.
+    const fitRSD = fitCalibration(data, '1/RSD2')!;
+    expect(fitRSD.slope).toBeCloseTo(84030 / 39263, 12);
+    expect(fitRSD.intercept).toBeCloseTo(135517 / 39263, 12);
+    expect(fitRSD.slope).not.toBeCloseTo(5766 / 2615, 5);
   });
 
   it('uses the actual measured blank mean for RSD and does not use a concentration floor', () => {
     const data = precisionStandards();
-    const result = calculateWeights(data, '1/RSD');
-    expect(result.points[0]).toEqual({ id: data[0].id, role: 'fit', sd: 1, rsd: 50, weight: 0.02 });
+    const result = calculateWeights(data, '1/RSD2');
+    expect(result.points[0]).toEqual({ id: data[0].id, role: 'fit', sd: 1, rsd: 50, weight: 4 });
     expect(result.points[0].weight).not.toBe(result.points[1].weight);
     data[0].readings = [-3, -2, -1];
-    const negativeBlank = calculateWeights(data, '1/RSD');
+    const negativeBlank = calculateWeights(data, '1/RSD2');
     expect(negativeBlank.error).toBeNull();
     expect(negativeBlank.points[0]).toEqual(result.points[0]);
   });
@@ -226,31 +224,32 @@ describe('literal replicate-precision weighting', () => {
   it('keeps near-zero nonzero means eligible without an epsilon cutoff or weight floor', () => {
     const data = precisionStandards();
     data[0].readings = [1e-18, 2e-18, 3e-18];
-    const result = calculateWeights(data, '1/RSD');
+    const result = calculateWeights(data, '1/RSD2');
     expect(result.error).toBeNull();
     expect(result.points[0].rsd).toBeCloseTo(50, 10);
-    expect(result.points[0].weight).toBeCloseTo(0.02, 12);
+    expect(result.points[0].weight).toBeCloseTo(4, 12);
     expect(rsd(data[0].readings)).toBeCloseTo(50, 10);
-    expect(fitCalibration(data, '1/RSD')).not.toBeNull();
+    expect(fitCalibration(data, '1/RSD2')).not.toBeNull();
   });
 
   it('rejects zero-mean RSD while zero-mean SD weighting remains defined', () => {
     const data = precisionStandards();
     data[0].readings = [-1, 0, 1];
-    const invalid = calculateWeights(data, '1/RSD');
+    const invalid = calculateWeights(data, '1/RSD2');
     expect(invalid.error).toMatch(/Calibration blank.*nonzero mean/);
     expect(invalid.points[0]).toEqual({ id: data[0].id, role: 'fit', sd: 1, rsd: null, weight: null });
-    expect(fitCalibration(data, '1/RSD')).toBeNull();
-    expect(calculateWeights(data, '1/SD').error).toBeNull();
-    expect(fitCalibration(data, '1/SD')).not.toBeNull();
+    expect(fitCalibration(data, '1/RSD2')).toBeNull();
+    expect(calculateWeights(data, '1/SD2').error).toBeNull();
+    expect(fitCalibration(data, '1/SD2')).not.toBeNull();
   });
 
   it('rejects incomplete or zero-SD standards without dropping them or falling back', () => {
-    for (const weighting of ['1/SD', '1/RSD'] as const) {
+    for (const weighting of ['1/SD2', '1/RSD2'] as const) {
       const partial = precisionStandards();
       partial[2].readings = [8];
       const incomplete = calculateWeights(partial, weighting);
       expect(incomplete.error).toMatch(/Standard 2.*at least 2 replicate/);
+      expect(incomplete.error).toContain(weighting === '1/SD2' ? '1/SD²' : '1/RSD²');
       expect(incomplete.points).toHaveLength(4);
       expect(incomplete.points[2]).toEqual({ id: partial[2].id, role: 'fit', sd: null, rsd: null, weight: null });
       expect(fitCalibration(partial, weighting)).toBeNull();
@@ -268,7 +267,7 @@ describe('literal replicate-precision weighting', () => {
     data.push({ id: 'unmeasured', name: 'Not acquired', concentration: 10, included: true, readings: [] });
     data.push({ id: 'excluded', name: 'Excluded invalid', concentration: 100, included: false, readings: [Number.NaN] });
     const original = structuredClone(data);
-    for (const weighting of ['none', '1/x', '1/x2', '1/SD', '1/RSD'] as const) {
+    for (const weighting of ['none', '1/x', '1/x2', '1/SD2', '1/RSD2'] as const) {
       const diagnostics = calculateWeights(data, weighting);
       expect(diagnostics.error).toBeNull();
       expect(diagnostics.points).toHaveLength(4);
@@ -281,40 +280,53 @@ describe('literal replicate-precision weighting', () => {
     const data = precisionStandards();
     data.forEach((point) => { const center = mean(point.readings); point.readings = [center - 2, center, center + 2]; });
     const plain = fitCalibration(data, 'none')!;
-    const weighted = fitCalibration(data, '1/SD')!;
+    const weighted = fitCalibration(data, '1/SD2')!;
     expect(weighted.slope).toBeCloseTo(plain.slope, 12);
     expect(weighted.intercept).toBeCloseTo(plain.intercept, 12);
     const twoLevels = data.slice(0, 2);
-    expect(calculateWeights(twoLevels, '1/SD').error).toBeNull();
-    expect(fitCalibration(twoLevels, '1/SD')).toBeNull();
+    expect(calculateWeights(twoLevels, '1/SD2').error).toBeNull();
+    expect(fitCalibration(twoLevels, '1/SD2')).toBeNull();
   });
 
-  it('reports percent-RSD raw weights while fraction-RSD would give the same regression', () => {
+  it('reports fractional relative-SD weights while percent-based weights give the same curve', () => {
     const data = precisionStandards();
-    const percentRSD = calculateWeights(data, '1/RSD');
-    const fractionalRSDAsSD = data.map((point) => {
+    const fractionalRSD = calculateWeights(data, '1/RSD2');
+    fractionalRSD.points.forEach((point) => {
+      expect(point.weight).toBeCloseTo((100 / point.rsd!) ** 2, 12);
+      expect(point.weight).toBeCloseTo(10000 / point.rsd! ** 2, 12);
+    });
+    const percentRSDAsSD = data.map((point) => {
       const center = mean(point.readings);
-      const relativeFraction = sd(point.readings) / Math.abs(center);
-      return { ...point, readings: [center - relativeFraction, center, center + relativeFraction] };
+      const relativePercent = rsd(point.readings)!;
+      return { ...point, readings: [center - relativePercent, center, center + relativePercent] };
     });
-    const fractionWeights = calculateWeights(fractionalRSDAsSD, '1/SD');
-    fractionWeights.points.forEach((point, index) => {
-      expect(point.weight).toBeCloseTo(percentRSD.points[index].weight! * 100, 10);
+    const percentWeights = calculateWeights(percentRSDAsSD, '1/SD2');
+    percentWeights.points.forEach((point, index) => {
+      expect(point.weight! * 10000).toBeCloseTo(fractionalRSD.points[index].weight!, 10);
     });
-    const literalFit = fitCalibration(data, '1/RSD')!;
-    const fractionFit = fitCalibration(fractionalRSDAsSD, '1/SD')!;
-    expect(literalFit.slope).toBeCloseTo(fractionFit.slope, 10);
-    expect(literalFit.intercept).toBeCloseTo(fractionFit.intercept, 10);
+    const fractionFit = fitCalibration(data, '1/RSD2')!;
+    const percentFit = fitCalibration(percentRSDAsSD, '1/SD2')!;
+    expect(fractionFit.slope).toBeCloseTo(percentFit.slope, 10);
+    expect(fractionFit.intercept).toBeCloseTo(percentFit.intercept, 10);
+  });
+
+  it('rejects nonfinite squared weights instead of clipping or falling back', () => {
+    const data = precisionStandards();
+    data[0].readings = [1e-160, 2e-160, 3e-160];
+    const result = calculateWeights(data, '1/SD2');
+    expect(result.error).toMatch(/Calibration blank.*1\/SD².*finite, positive weight/);
+    expect(result.points[0].weight).toBeNull();
+    expect(fitCalibration(data, '1/SD2')).toBeNull();
   });
 
   it('rejects nonfinite measurements and nonfinite precision statistics', () => {
     for (const readings of [[Number.NaN, 1], [Number.POSITIVE_INFINITY, 1], [1e200, -1e200, 1]]) {
       const data = precisionStandards();
       data[0].readings = readings;
-      const result = calculateWeights(data, '1/SD');
+      const result = calculateWeights(data, '1/SD2');
       expect(result.error).toMatch(/Calibration blank.*finite/);
       expect(result.points[0].weight).toBeNull();
-      expect(fitCalibration(data, '1/SD')).toBeNull();
+      expect(fitCalibration(data, '1/SD2')).toBeNull();
     }
   });
 });

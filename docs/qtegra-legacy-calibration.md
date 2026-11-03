@@ -37,8 +37,13 @@ The requested regression and blank handling are verified against the sections ab
 - **Relative concentration SE:** retains `sqrt(sum(relative_error_percent²) / (k − 2))`, omitting zero concentrations and using the two-term linear-polynomial convention. It is undefined for `k <= 2`. Algorithms PDF16 / printed2-2 defines polynomial term count; release2.25 issue603413 (PDF6) changes the forcing-related p calculation. No undocumented historical correction is inferred here.
 - **Detection limits:** Algorithms PDF33 / printed4-5 defines `LOD = 3*SD_blank/slope` and `MQL = 10*SD_blank/slope*TDF`. The simulator shows estimated solution LOD and LOQ with TDF=1, requires at least ten included blank readings as its own readiness rule, and uses the newly fitted slope. Blank forcing changes the slope estimate; it is not a separate switch that enables the LOD formula.
 
-## Existing precision-weighting options
+## Precision-weighting options
 
-The simulator's explicitly named `1/SD` and `1/RSD` options remain literal educational weights with a free intercept, as requested in the earlier prototype iteration. They have not been silently changed by this concentration-weighting update.
+The displayed **1/SD²** and **1/RSD²** options follow Qtegra's **Absolute SD** and **Relative SD** definitions in Algorithms Table4-2 (PDF38 / printed4-10):
 
-They differ from the vendor's **Absolute SD** and **Relative SD** definitions: Algorithms Table4-2 (PDF38 / printed4-10) gives `1/SD²` and `1/(SD/mean intensity)²`, respectively. Those vendor precision modes would need separately named options and dedicated validation before being claimed as supported.
+- `w = 1/SD²`, where SD is the sample SD of replicate net intensities.
+- `w = 1/(SD/abs(mean intensity))² = (mean intensity/SD)²`.
+
+RSD values in tables and CSV are still percentages. Thus `w = (100/RSD%)²`, rather than `1/(RSD%)²`; the common factor10000 does not change the resulting regression but matters when displaying raw coefficients. Both precision modes retain a free intercept and require at least two readings, positive SD and finite positive weights; relative weighting also requires a nonzero mean.
+
+Saved browser sessions using the earlier literal `1/SD` or `1/RSD` prototype selections migrate to the corresponding squared mode without discarding measurements.

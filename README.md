@@ -8,7 +8,7 @@ An interactive educational instrument for exploring ICP-OES calibration. The ent
 
 Live app: [Rosen Academy ICP-OES simulator](https://rosen-academy-3v6duxmcsbzvmerc3s52mk.streamlit.app/).
 
-The **LEXICON** visual theme uses black text on white panels and bright green/white on black instrument displays.
+The **LEXICON** visual theme uses black text on white panels and bright green on black instrument controls. Graphs use gray backgrounds, black curves/axes/labels, and red replicate-SD bars.
 
 The Streamlit entrypoint is **`streamlit_app.py`**. The existing English React laboratory is embedded unchanged, including its calibration model, CSV downloads, and browser-local session storage.
 
@@ -72,7 +72,7 @@ Download `dist/rosen-academy.html` and open it directly in Chrome, Edge, or Fire
 ## First experiment
 
 1. Click **Load demo** to acquire example measurements immediately, or **Run calibration** to watch sequential acquisition.
-2. Compare **None**, **1/x**, **1/x²**, **1/SD**, and **1/RSD** weighting without regenerating measurements. Inspect back-calculated concentration errors as well as R².
+2. Compare **None**, **1/x**, **1/x²**, **1/SD²**, and **1/RSD²** weighting without regenerating measurements. Inspect back-calculated concentration errors as well as R².
 3. Exclude the 100 ppm standard with its checkbox and compare the fit. Measurements are retained.
 4. Select a less sensitive analytical line and acquire a new calibration. Changing the line, response model, or integration time clears readings to avoid mixing incompatible measurements.
 5. Use **Log x** to inspect the concentration range. The zero-concentration blank is hidden on this axis, but its regression inclusion remains unchanged.
@@ -86,8 +86,16 @@ Download `dist/rosen-academy.html` and open it directly in Chrome, Edge, or Fire
 - 3, 5, or 10 repeat measurements; 1, 5, or 10 s integration with accelerated acquisition playback.
 - Standard means, sample SD, RSD, weighted linear regression with a free or legacy blank-fixed intercept, back-calculated concentrations, and error plots.
 - Optional display of the underlying synthetic response curve, distinct from the fitted straight line.
+- Red **±1 sample SD** bars on measured calibration points, including blank anchors and excluded measurements when visible. One reading has no estimable SD. The concentration-error graph propagates replicate SD through the fixed fitted line; calibration-parameter uncertainty is not included.
 - Browser-local session persistence and CSV export containing raw replicate data and calculation metadata.
 - Locally bundled fonts: no remote font or analytics requests.
+
+
+### Reading the SD bars
+
+On the calibration graph, red vertical bars span `mean intensity − sample SD` to `mean intensity + sample SD`, with caps. The axes include these extents, including negative blank signals. These bars represent variation between replicate readings, not SEM or confidence limits for a mean. Small bars remain to scale; the simulator does not exaggerate their height.
+
+On the concentration-error graph, the red bar half-width is `100 * SD_signal / (abs(slope) * nominal concentration)` percentage points, centered on the back-calculated relative error. This conditional propagation treats the fitted line as fixed and excludes zero nominal concentration. On a logarithmic concentration axis, the zero blank and its bar are hidden while its legacy intercept constraint remains active.
 
 ## Scientific model and limitations
 
@@ -101,7 +109,7 @@ With concentration `C`, sensitivity `b`, ceiling `S`, and negative curvature coe
 
 The nonlinear modes generate nonlinear instrument response; the calibration remains a **linear regression**, deliberately exposing bias when a straight line is applied over an unsuitable range. There is no polynomial/nonlinear fitting in this version.
 
-Replicates use seeded Gaussian noise combining electronic, photon/background, and proportional contributions, scaled by `1 / sqrt(integration time)`. Net blank signals may be negative. Blank RSD is normally labelled **n/a**, because percentages around zero are not informative. In **1/RSD** mode its calculated numerical value is shown with **†**, because it contributes to the selected weighting; the warning about instability remains visible.
+Replicates use seeded Gaussian noise combining electronic, photon/background, and proportional contributions, scaled by `1 / sqrt(integration time)`. Net blank signals may be negative. Blank RSD is normally labelled **n/a**, because percentages around zero are not informative. In **1/RSD²** mode its calculated numerical value is shown with **†**, because it contributes to the selected weighting; the warning about instability remains visible.
 
 Regression uses each included standard's mean as an observation and minimizes `sum(w_i * (mean_signal_i − intercept − slope * concentration_i)^2)`. Unconstrained fits require at least three distinct included, measured concentrations. Legacy concentration-weighted fits require an included measured blank plus at least two distinct nonzero measured concentrations.
 
@@ -110,14 +118,14 @@ Regression uses each included standard's mean as an observation and minimizes `s
 | None | `1` |
 | 1/x | `1 / concentration` |
 | 1/x² | `1 / concentration²` |
-| 1/SD | `1 / sample SD of replicate net intensities (cps)` |
-| 1/RSD | `1 / RSD (%)`, with `RSD = 100 * sample SD / abs(mean net intensity)` |
+| 1/SD² | `1 / SD²`, with SD the replicate sample SD in cps |
+| 1/RSD² | `1 / (SD / abs(mean net intensity))² = (100 / RSD%)²` |
 
-For **1/x and 1/x²**, the documented **Qtegra legacy** behavior is used: the measured included blank mean fixes the intercept (**Forcing = Blank**), the blank has no numeric weight, and only nonzero standards enter the weighted slope calculation. The blank Weight cell displays **ANCHOR**. No substitute concentration is used. Missing, excluded, unmeasured or ambiguous blanks produce a clear error. The slope is `sum(w*c*(mean_signal − blank_mean)) / sum(w*c²)`. Other options retain a free intercept. For precision modes, each included measured standard requires at least two replicates and a finite, positive sample SD (`n − 1` denominator). **1/RSD** additionally requires a nonzero measured mean. Undefined weights produce an explicit error: the simulator does not drop the standard, invent a floor, or revert to an unweighted fit. The user can acquire valid readings or explicitly exclude that standard.
+For **1/x and 1/x²**, the documented **Qtegra legacy** behavior is used: the measured included blank mean fixes the intercept (**Forcing = Blank**), the blank has no numeric weight, and only nonzero standards enter the weighted slope calculation. The blank Weight cell displays **ANCHOR**. No substitute concentration is used. Missing, excluded, unmeasured or ambiguous blanks produce a clear error. The slope is `sum(w*c*(mean_signal − blank_mean)) / sum(w*c²)`. Other options retain a free intercept. For precision modes, each included measured standard requires at least two replicates and a finite, positive sample SD (`n − 1` denominator). **1/RSD²** additionally requires a nonzero measured mean. Undefined weights produce an explicit error: the simulator does not drop the standard, invent a floor, or revert to an unweighted fit. The user can acquire valid readings or explicitly exclude that standard.
 
-Precision weights are literal **1/SD and 1/RSD**, not inverse variances, and do not use the standard error of the mean. They use replicate net intensity rather than calculated concentrations. A nonzero observed blank mean permits a mathematical 1/RSD coefficient, but this coefficient is unstable near zero. Raw coefficients are shown in the **Weight** column and CSV; the regression rescales all weights by one common factor for numerical stability, which leaves the fit unchanged.
+Precision weights follow Qtegra Absolute SD and Relative SD: **1/SD²** and **1/(SD/abs(mean))²**. SD is the sample SD of replicate net intensity, not the standard error of the mean. The displayed RSD is a percentage, whereas weighting uses fractional relative SD: `w = (100/RSD%)²`. Raw relative weights are therefore 10000 times `1/(RSD%)²`; that common scale does not change the fitted curve. A nonzero observed blank mean permits a relative-variance coefficient, but this coefficient is unstable near zero. Raw coefficients are shown in the **Weight** column and CSV; the regression rescales all weights by one common factor for numerical stability. Existing browser sessions using the old unsquared options migrate to the corresponding squared option while preserving all readings.
 
-**Vendor-algorithm status:** legacy inverse-concentration weighting and automatic blank forcing are verified against the supplied Qtegra manual and the 2.25 change notes. See [source references, formulas and scope](docs/qtegra-legacy-calibration.md). The existing literal 1/SD and 1/RSD options are educational choices; Qtegra Absolute SD and Relative SD use squared inverse-deviation weights. The simulator does not claim complete historical Qtegra statistics compatibility.
+**Vendor-algorithm status:** legacy inverse-concentration weighting and automatic blank forcing are verified against the supplied Qtegra manual and the 2.25 change notes. See [source references, formulas and scope](docs/qtegra-legacy-calibration.md). The precision weights also follow the squared definitions in Qtegra Algorithms Table 4-2 (PDF38 / printed4-10). The simulator does not claim complete historical Qtegra statistics compatibility.
 
 - R² is `1 − SSE/SST` with **unweighted** SSE over numerical fit observations, including for weighted fits. It may be negative for a weighted fit and is not presented as the revised Qtegra 2.25 Pearson R.
 - Residual SE is `sqrt(SSE / (n − p))`, in cps, over numerical fit observations; p=1 for a blank-fixed intercept and p=2 for a free line. The blank anchor is excluded from n in legacy concentration-weighted fits.

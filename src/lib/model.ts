@@ -4,7 +4,7 @@
  * Signals are background-corrected intensity rates in counts per second.
  */
 export type ResponseMode = 'linear' | 'saturation' | 'curvature';
-export type Weighting = 'none' | '1/x' | '1/x2' | '1/SD' | '1/RSD';
+export type Weighting = 'none' | '1/x' | '1/x2' | '1/SD2' | '1/RSD2';
 
 export interface SpectralLine {
   id: string;
@@ -97,7 +97,7 @@ export interface WeightPoint {
   role: 'fit' | 'anchor';
   sd: number | null;
   rsd: number | null;
-  /** Literal, unnormalized regression weight; no inverse-variance substitution. */
+  /** Raw, unnormalized regression weight; relative SD uses fractional units. */
   weight: number | null;
 }
 
@@ -111,15 +111,17 @@ export interface WeightResult {
 /**
  * Inspect included, measured standards without modifying their readings.
  * SD is sample SD of replicate net intensities (n - 1 denominator), in cps.
- * RSD is 100 * SD / abs(mean), in percent. Precision weights are literally
- * 1/SD and 1/RSD, not their squares. No blank exception or numerical floor is
- * applied to precision weights: an undefined prerequisite invalidates the fit.
+ * RSD diagnostics are 100 * SD / abs(mean), in percent. Qtegra precision weights
+ * are 1/SD² and 1/(SD/abs(mean))², respectively. The relative weight therefore
+ * equals (100 / RSDpercent)², not 1/RSDpercent². No blank exception or numerical
+ * floor is applied: an undefined prerequisite invalidates the fit.
  */
 export function calculateWeights(standards: Standard[], weighting: Weighting): WeightResult {
   const measured = standards.filter((standard) => standard.included && standard.readings.length > 0);
   const forcing = weighting === '1/x' || weighting === '1/x2' ? 'blank' : 'none';
   const blanks = measured.filter((standard) => standard.concentration === 0);
-  const precision = weighting === '1/SD' || weighting === '1/RSD';
+  const precision = weighting === '1/SD2' || weighting === '1/RSD2';
+  const weightingLabel = weighting === '1/SD2' ? '1/SD²' : weighting === '1/RSD2' ? '1/RSD²' : weighting;
   let error: string | null = forcing === 'blank' && blanks.length !== 1
     ? `${weighting} weighting requires exactly one included, measured calibration blank to anchor the fit.`
     : null;
@@ -149,10 +151,10 @@ export function calculateWeights(standards: Standard[], weighting: Weighting): W
       return point;
     }
     if (precision) {
-      if (standard.readings.length < 2) return fail(`${weighting} weighting requires at least 2 replicate readings.`);
-      if (point.sd === null || point.sd <= 0) return fail(`${weighting} weighting requires a positive replicate SD.`);
-      if (weighting === '1/RSD' && average === 0) return fail('1/RSD weighting requires a nonzero mean net intensity.');
-      point.weight = weighting === '1/SD' ? 1 / point.sd : 1 / point.rsd!;
+      if (standard.readings.length < 2) return fail(`${weightingLabel} weighting requires at least 2 replicate readings.`);
+      if (point.sd === null || point.sd <= 0) return fail(`${weightingLabel} weighting requires a positive replicate SD.`);
+      if (weighting === '1/RSD2' && average === 0) return fail('1/RSD² weighting requires a nonzero mean net intensity.');
+      point.weight = weighting === '1/SD2' ? (1 / point.sd) ** 2 : (Math.abs(average) / point.sd) ** 2;
     } else if (weighting === 'none') {
       point.weight = 1;
     } else {
@@ -160,7 +162,7 @@ export function calculateWeights(standards: Standard[], weighting: Weighting): W
     }
     if (!Number.isFinite(point.weight) || point.weight <= 0) {
       point.weight = null;
-      return fail(`${weighting} weighting requires a finite, positive weight.`);
+      return fail(`${weightingLabel} weighting requires a finite, positive weight.`);
     }
     return point;
   });
@@ -172,7 +174,8 @@ export function calculateWeights(standards: Standard[], weighting: Weighting): W
  * Legacy Qtegra 1/concentration and 1/concentration² behavior excludes the
  * blank from weighted observations and fixes the intercept to its measured
  * mean intensity (Forcing = Blank). No numeric blank weight or floor is used.
- * Precision weights use measured sample SD or measured RSD (%) directly.
+ * Precision weights use inverse sample variance or inverse squared fractional
+ * relative SD, as defined by Qtegra's Absolute SD and Relative SD algorithms.
  * None and precision modes retain a free intercept.
  */
 export function fitCalibration(standards: Standard[], weighting: Weighting): FitResult | null {
@@ -190,7 +193,7 @@ export function fitCalibration(standards: Standard[], weighting: Weighting): Fit
     standard,
     x: standard.concentration,
     y: mean(standard.readings),
-    // A common normalization preserves the literal WLS objective while
+    // A common normalization preserves the WLS objective while
     // avoiding overflow in sums. Diagnostic weights above remain raw.
     weight: weightById.get(standard.id)! / maximumWeight,
   }));

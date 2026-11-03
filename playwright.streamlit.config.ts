@@ -2,6 +2,7 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
+  outputDir: './test-results-streamlit',
   testMatch: /streamlit\.spec\.ts/,
   fullyParallel: false,
   workers: 1,

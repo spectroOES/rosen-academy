@@ -11,3 +11,5 @@ test-results/
 __pycache__/
 *.py[cod]
 .streamlit/secrets.toml
+
+test-results-streamlit/

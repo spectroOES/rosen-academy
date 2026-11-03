@@ -142,7 +142,7 @@ test('exports raw replicates with method metadata and restores its session after
   expect(download.suggestedFilename()).toBe('rosen-Cu-324.754-calibration.csv');
   const csv = await readFile((await download.path())!, 'utf8');
   expect(csv).toContain('"Replicate","Net intensity (cps)"');
-  expect(csv).toContain('"Cu","324.754","saturation","1/x2","5"');
+  expect(csv).toContain('"Cu","324.754","saturation","1/x²","5"');
   expect(csv).toContain('"Fit summary","Value"');
   expect(csv).toContain('Synthetic educational data');
   expect(csv.split('\r\n').filter((line) => line.startsWith('"Cu",'))).toHaveLength(25);

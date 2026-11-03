@@ -15,10 +15,10 @@ async function demo(page: Page) {
   expect((await readings(page)).filter(values => values.length > 0)).toHaveLength(6);
 }
 
-test('precision weighting refits retained data, exports literal coefficients, and survives reload', async ({ page }) => {
+test('precision weighting refits retained data, exports squared coefficients, and survives reload', async ({ page }) => {
   await demo(page);
   const raw = await readings(page);
-  for (const mode of ['1/SD', '1/RSD']) {
+  for (const mode of ['1/SD²', '1/RSD²']) {
     await page.getByRole('group', { name: 'Regression weighting' }).getByRole('button', { name: mode, exact: true }).click();
     await expect(page.getByRole('alert')).toHaveCount(0);
     await expect(page.locator('.equation')).not.toContainText('measure at least');
@@ -32,7 +32,7 @@ test('precision weighting refits retained data, exports literal coefficients, an
     for (const row of (await session(page)).standards) {
       const avg = row.readings.reduce((sum, value) => sum + value, 0) / row.readings.length;
       const sd = Math.sqrt(row.readings.reduce((sum, value) => sum + (value - avg) ** 2, 0) / (row.readings.length - 1));
-      const expectedWeight = mode === '1/SD' ? 1 / sd : Math.abs(avg) / (100 * sd);
+      const expectedWeight = mode === '1/SD²' ? 1 / sd ** 2 : (avg / sd) ** 2;
       const actual = Number(exported.find(values => values[5] === row.name)!.at(-1));
       expect(actual / expectedWeight).toBeCloseTo(1, 12);
     }
@@ -40,7 +40,7 @@ test('precision weighting refits retained data, exports literal coefficients, an
   await expect(page.locator('.standards-table tbody tr').first().locator('td').nth(4)).toContainText('†');
   await expect(page.getByText(/Blank RSD and its weight are unstable near zero/)).toBeVisible();
   await page.reload();
-  await expect(page.getByRole('group', { name: 'Regression weighting' }).getByRole('button', { name: '1/RSD', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('group', { name: 'Regression weighting' }).getByRole('button', { name: '1/RSD²', exact: true })).toHaveAttribute('aria-pressed', 'true');
   expect(await readings(page)).toEqual(raw);
 });
 
@@ -48,9 +48,9 @@ test('invalid replicate precision is explained without dropping a standard or fa
   await demo(page);
   const original = await session(page);
   const cases = [
-    { mode: '1/SD', values: [4], message: 'at least 2 replicate readings' },
-    { mode: '1/SD', values: [4, 4, 4], message: 'positive replicate SD' },
-    { mode: '1/RSD', values: [-1, 0, 1], message: 'nonzero mean net intensity' },
+    { mode: '1/SD2', values: [4], message: 'at least 2 replicate readings' },
+    { mode: '1/SD2', values: [4, 4, 4], message: 'positive replicate SD' },
+    { mode: '1/RSD2', values: [-1, 0, 1], message: 'nonzero mean net intensity' },
   ];
   for (const sample of cases) {
     const fixture = structuredClone(original);
@@ -73,7 +73,7 @@ test('larger typography and all five weighting controls fit a mobile viewport', 
   await demo(page);
   const group = page.getByRole('group', { name: 'Regression weighting' });
   await expect(group.getByRole('button')).toHaveCount(5);
-  for (const label of ['None', '1/x', '1/x²', '1/SD', '1/RSD']) {
+  for (const label of ['None', '1/x', '1/x²', '1/SD²', '1/RSD²']) {
     const button = group.getByRole('button', { name: label, exact: true });
     await button.click();
     const rect = await button.boundingBox();
@@ -96,4 +96,20 @@ test('larger typography and all five weighting controls fit a mobile viewport', 
     return { lines: range.getClientRects().length, width: el.clientWidth, scroll: el.scrollWidth };
   }));
   for (const value of values) { expect(value.lines).toBe(1); expect(value.scroll).toBeLessThanOrEqual(value.width); }
+});
+
+test('old precision selections migrate to squared modes without losing measured data', async ({ page }) => {
+  await demo(page);
+  const original = await session(page);
+  const raw = original.standards.map(row => row.readings);
+  for (const [oldMode, newMode, label] of [['1/SD', '1/SD2', '1/SD²'], ['1/RSD', '1/RSD2', '1/RSD²']]) {
+    const fixture = structuredClone(original);
+    fixture.weighting = oldMode;
+    await page.evaluate(({ key, value }) => localStorage.setItem(key, JSON.stringify(value)), { key: KEY, value: fixture });
+    await page.reload();
+    await expect(page.getByRole('group', { name: 'Regression weighting' }).getByRole('button', { name: label, exact: true })).toHaveAttribute('aria-pressed', 'true');
+    expect((await session(page)).weighting).toBe(newMode);
+    expect(await readings(page)).toEqual(raw);
+    await expect(page.getByRole('alert')).toHaveCount(0);
+  }
 });

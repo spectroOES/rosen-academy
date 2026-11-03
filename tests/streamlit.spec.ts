@@ -43,7 +43,7 @@ test('Streamlit serves the English laboratory, refits existing demo readings, an
   const download = await downloading;
   expect(download.suggestedFilename()).toBe('rosen-Cu-324.754-calibration.csv');
   const csv = await readFile((await download.path())!, 'utf8');
-  expect(csv).toContain('"Cu","324.754","saturation","1/x2","5"');
+  expect(csv).toContain('"Cu","324.754","saturation","1/x²","5"');
   expect(csv.split('\r\n').filter(line => line.startsWith('"Cu",'))).toHaveLength(25);
   for (const value of originalReadings.flat()) expect(csv).toContain(`"${value}"`);
   expect(errors).toEqual([]);
