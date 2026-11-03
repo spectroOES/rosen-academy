@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceHash": "a8022ee19c0e00f950ff4cfee718008a7777f0cf6fa5dd678e6ab39a46b77d84",
+  "sourceHash": "22496cbbb3d31cbe1ecc696df70d6926aed5404510d3a08b9f02c44d29d72f4b",
   "sourceFiles": [
     "index.html",
     "package-lock.json",
@@ -17,7 +17,7 @@
     "tsconfig.json",
     "vite.config.ts"
   ],
-  "artifactHash": "37ac51a29f1090974dd9ed001c68598400c84ece41736d7e70d6a120e663a92c",
+  "artifactHash": "9fe5f6f85946bda4f68024370f82571ba1dd030d5fdbbf8db4e6b1e8ac603273",
   "artifact": "index.html",
-  "sizeBytes": 489123
+  "sizeBytes": 493564
 }

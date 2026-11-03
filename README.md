@@ -72,7 +72,7 @@ Download `dist/rosen-academy.html` and open it directly in Chrome, Edge, or Fire
 ## First experiment
 
 1. Click **Load demo** to acquire example measurements immediately, or **Run calibration** to watch sequential acquisition.
-2. Compare **None**, **1/x**, and **1/x²** weighting without regenerating measurements. Inspect back-calculated concentration errors as well as R².
+2. Compare **None**, **1/x**, **1/x²**, **1/SD**, and **1/RSD** weighting without regenerating measurements. Inspect back-calculated concentration errors as well as R².
 3. Exclude the 100 ppm standard with its checkbox and compare the fit. Measurements are retained.
 4. Select a less sensitive analytical line and acquire a new calibration. Changing the line, response model, or integration time clears readings to avoid mixing incompatible measurements.
 5. Use **Log x** to inspect the concentration range. The zero-concentration blank is hidden on this axis, but its regression inclusion remains unchanged.
@@ -101,9 +101,23 @@ With concentration `C`, sensitivity `b`, ceiling `S`, and negative curvature coe
 
 The nonlinear modes generate nonlinear instrument response; the calibration remains a **linear regression**, deliberately exposing bias when a straight line is applied over an unsuitable range. There is no polynomial/nonlinear fitting in this version.
 
-Replicates use seeded Gaussian noise combining electronic, photon/background, and proportional contributions, scaled by `1 / sqrt(integration time)`. Net blank signals may be negative. Blank RSD is labelled **n/a**, because percentages around zero are not informative.
+Replicates use seeded Gaussian noise combining electronic, photon/background, and proportional contributions, scaled by `1 / sqrt(integration time)`. Net blank signals may be negative. Blank RSD is normally labelled **n/a**, because percentages around zero are not informative. In **1/RSD** mode its calculated numerical value is shown with **†**, because it contributes to the selected weighting; the warning about instability remains visible.
 
-Regression uses each included standard's mean as one observation, with a free intercept. Weights are 1, `1/x`, or `1/x²`. For inverse weights, zero concentration is replaced with the lowest positive included concentration **for the weight calculation only**. This explicitly chosen blank policy is not a claim about any vendor's software. At least three distinct included, measured concentrations are required.
+Regression uses each included standard's mean as one observation, with a free intercept, and minimizes `sum(w_i * (mean_signal_i − intercept − slope * concentration_i)^2)`. At least three distinct included, measured concentrations are required.
+
+| Option | Literal coefficient `w_i` |
+| --- | --- |
+| None | `1` |
+| 1/x | `1 / concentration` |
+| 1/x² | `1 / concentration²` |
+| 1/SD | `1 / sample SD of replicate net intensities (cps)` |
+| 1/RSD | `1 / RSD (%)`, with `RSD = 100 * sample SD / abs(mean net intensity)` |
+
+For **1/x and 1/x² only**, zero concentration is replaced with the lowest positive included concentration **for the weight calculation only**. For precision modes, each included measured standard requires at least two replicates and a finite, positive sample SD (`n − 1` denominator). **1/RSD** additionally requires a nonzero measured mean. Undefined weights produce an explicit error: the simulator does not drop the standard, invent a floor, or revert to an unweighted fit. The user can acquire valid readings or explicitly exclude that standard.
+
+Precision weights are literal **1/SD and 1/RSD**, not inverse variances, and do not use the standard error of the mean. They use replicate net intensity rather than calculated concentrations. A nonzero observed blank mean permits a mathematical 1/RSD coefficient, but this coefficient is unstable near zero. Raw coefficients are shown in the **Weight** column and CSV; the regression rescales all weights by one common factor for numerical stability, which leaves the fit unchanged.
+
+**Vendor-algorithm status:** these transparent educational definitions have not been verified against Qtegra documentation. They should not be presented as a reproduction of Qtegra's algorithms until the relevant manual sections are available and compared, including SD/RSD basis, blank handling, and regression diagnostics.
 
 - R² is `1 − SSE/SST` with **unweighted** SSE, including for weighted fits. It may be negative for a weighted fit.
 - Residual SE is `sqrt(SSE / (n − 2))`, in cps, using included standard means.

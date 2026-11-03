@@ -4,7 +4,7 @@
  * Signals are background-corrected intensity rates in counts per second.
  */
 export type ResponseMode = 'linear' | 'saturation' | 'curvature';
-export type Weighting = 'none' | '1/x' | '1/x2';
+export type Weighting = 'none' | '1/x' | '1/x2' | '1/SD' | '1/RSD';
 
 export interface SpectralLine {
   id: string;
@@ -83,30 +83,104 @@ export function sd(values: number[]): number {
 export function rsd(values: number[]): number | null {
   const average = mean(values);
   const deviation = sd(values);
-  if (!Number.isFinite(average) || !Number.isFinite(deviation) || Math.abs(average) <= Number.EPSILON) return null;
-  return 100 * deviation / Math.abs(average);
+  if (!Number.isFinite(average) || !Number.isFinite(deviation) || average === 0) return null;
+  const relative = 100 * (deviation / Math.abs(average));
+  return Number.isFinite(relative) ? relative : null;
+}
+
+export interface WeightPoint {
+  id: string;
+  sd: number | null;
+  rsd: number | null;
+  /** Literal, unnormalized regression weight; no inverse-variance substitution. */
+  weight: number | null;
+}
+
+export interface WeightResult {
+  points: WeightPoint[];
+  error: string | null;
+}
+
+/**
+ * Inspect included, measured standards without modifying their readings.
+ * SD is sample SD of replicate net intensities (n - 1 denominator), in cps.
+ * RSD is 100 * SD / abs(mean), in percent. Precision weights are literally
+ * 1/SD and 1/RSD, not their squares. No blank exception or numerical floor is
+ * applied to precision weights: an undefined prerequisite invalidates the fit.
+ */
+export function calculateWeights(standards: Standard[], weighting: Weighting): WeightResult {
+  const measured = standards.filter((standard) => standard.included && standard.readings.length > 0);
+  const positiveConcentrations = measured
+    .map((standard) => standard.concentration)
+    .filter((value) => Number.isFinite(value) && value > 0);
+  const minimumPositive = Math.min(...positiveConcentrations);
+  const precision = weighting === '1/SD' || weighting === '1/RSD';
+  let error: string | null = null;
+  const points = measured.map((standard): WeightPoint => {
+    const point: WeightPoint = { id: standard.id, sd: null, rsd: null, weight: null };
+    const fail = (reason: string) => {
+      error ??= `${standard.name}: ${reason}`;
+      return point;
+    };
+    if (!Number.isFinite(standard.concentration) || standard.concentration < 0) return fail('concentration must be finite and nonnegative.');
+    if (standard.readings.some((value) => !Number.isFinite(value))) return fail('all replicate net intensities must be finite.');
+    const average = mean(standard.readings);
+    if (!Number.isFinite(average)) return fail('the mean replicate net intensity must be finite.');
+    if (standard.readings.length > 1) {
+      const deviation = sd(standard.readings);
+      if (!Number.isFinite(deviation)) return fail('the replicate SD must be finite.');
+      point.sd = deviation;
+      if (average !== 0) {
+        const relative = 100 * (deviation / Math.abs(average));
+        if (!Number.isFinite(relative)) return fail('the replicate RSD must be finite.');
+        point.rsd = relative;
+      }
+    }
+    if (precision) {
+      if (standard.readings.length < 2) return fail(`${weighting} weighting requires at least 2 replicate readings.`);
+      if (point.sd === null || point.sd <= 0) return fail(`${weighting} weighting requires a positive replicate SD.`);
+      if (weighting === '1/RSD' && average === 0) return fail('1/RSD weighting requires a nonzero mean net intensity.');
+      point.weight = weighting === '1/SD' ? 1 / point.sd : 1 / point.rsd!;
+    } else if (weighting === 'none') {
+      point.weight = 1;
+    } else {
+      if (!Number.isFinite(minimumPositive)) return fail(`${weighting} weighting requires at least one positive concentration.`);
+      const concentration = Math.max(standard.concentration, minimumPositive);
+      point.weight = weighting === '1/x2' ? 1 / concentration ** 2 : 1 / concentration;
+    }
+    if (!Number.isFinite(point.weight) || point.weight <= 0) {
+      point.weight = null;
+      return fail(`${weighting} weighting requires a finite, positive weight.`);
+    }
+    return point;
+  });
+  return { points, error };
 }
 
 /**
  * Fit standard mean responses. Each standard has one regression weight.
  * For inverse-concentration weights, blank concentration is floored at the
  * lowest positive included concentration: w = 1 / max(x, xmin)^power.
+ * Precision weights use measured sample SD or measured RSD (%) directly.
  * The free intercept is never forced through zero.
  */
 export function fitCalibration(standards: Standard[], weighting: Weighting): FitResult | null {
   const measured = standards.filter((standard) => standard.included && standard.readings.length > 0);
   if (measured.length < 3 || new Set(measured.map((standard) => standard.concentration)).size < 3) return null;
   if (measured.some((standard) => !Number.isFinite(standard.concentration) || standard.concentration < 0 || standard.readings.some((value) => !Number.isFinite(value)))) return null;
-  const minimumPositive = Math.min(...measured.filter((standard) => standard.concentration > 0).map((standard) => standard.concentration));
-  if (!Number.isFinite(minimumPositive)) return null;
-  const power = weighting === '1/x2' ? 2 : weighting === '1/x' ? 1 : 0;
-  const observations = measured.map((standard) => ({
+  const weights = calculateWeights(standards, weighting);
+  if (weights.error || weights.points.some((point) => point.weight === null)) return null;
+  const maximumWeight = Math.max(...weights.points.map((point) => point.weight!));
+  if (!Number.isFinite(maximumWeight) || maximumWeight <= 0) return null;
+  const observations = measured.map((standard, index) => ({
     standard,
     x: standard.concentration,
     y: mean(standard.readings),
-    // Normalize by xmin so weights stay <= 1, preserving the same WLS fit.
-    weight: power ? (minimumPositive / Math.max(standard.concentration, minimumPositive)) ** power : 1,
+    // A common normalization preserves the literal WLS objective while
+    // avoiding overflow in sums. Diagnostic weights above remain raw.
+    weight: weights.points[index].weight! / maximumWeight,
   }));
+  if (observations.some((point) => !Number.isFinite(point.weight) || point.weight <= 0)) return null;
   const totalWeight = observations.reduce((sum, point) => sum + point.weight, 0);
   const xMean = observations.reduce((sum, point) => sum + point.weight * point.x, 0) / totalWeight;
   const yMean = observations.reduce((sum, point) => sum + point.weight * point.y, 0) / totalWeight;
