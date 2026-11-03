@@ -1,0 +1,199 @@
+/**
+ * Transparent educational ICP-OES model. Wavelengths identify real analytical
+ * lines; every response coefficient below is synthetic, not instrument data.
+ * Signals are background-corrected intensity rates in counts per second.
+ */
+export type ResponseMode = 'linear' | 'saturation' | 'curvature';
+export type Weighting = 'none' | '1/x' | '1/x2';
+
+export interface SpectralLine {
+  id: string;
+  element: string;
+  wavelength: number;
+  sensitivity: number;
+  background: number;
+  saturation: number;
+  curvature: number;
+  label: string;
+  description: string;
+  recommendedMax: number;
+}
+
+export const ELEMENTS = ['Cu', 'Cd', 'Pb', 'Fe', 'Zn'];
+
+export const LINES: SpectralLine[] = [
+  { id: 'cu-324754', element: 'Cu', wavelength: 324.754, sensitivity: 52000, background: 2400, saturation: 1200000, curvature: -0.003, label: 'High sensitivity', description: 'Strong response at trace levels; reaches detector compression earlier.', recommendedMax: 5 },
+  { id: 'cu-327396', element: 'Cu', wavelength: 327.396, sensitivity: 27000, background: 1800, saturation: 1600000, curvature: -0.0018, label: 'Medium sensitivity', description: 'Balanced trace response and usable concentration range.', recommendedMax: 10 },
+  { id: 'cu-224700', element: 'Cu', wavelength: 224.700, sensitivity: 4200, background: 1300, saturation: 2200000, curvature: -0.0006, label: 'Low sensitivity', description: 'Weaker trace signal with a wider high-concentration range.', recommendedMax: 100 },
+  { id: 'cd-214439', element: 'Cd', wavelength: 214.439, sensitivity: 42000, background: 2100, saturation: 1100000, curvature: -0.0035, label: 'High sensitivity', description: 'Strong trace response; susceptible to compression at high concentrations.', recommendedMax: 5 },
+  { id: 'cd-226502', element: 'Cd', wavelength: 226.502, sensitivity: 21000, background: 1600, saturation: 1500000, curvature: -0.0015, label: 'Medium sensitivity', description: 'Intermediate sensitivity and upper working range.', recommendedMax: 10 },
+  { id: 'cd-228802', element: 'Cd', wavelength: 228.802, sensitivity: 5200, background: 1100, saturation: 2400000, curvature: -0.0005, label: 'Low sensitivity', description: 'Lower sensitivity for examining higher-concentration calibrations.', recommendedMax: 100 },
+  { id: 'pb-220353', element: 'Pb', wavelength: 220.353, sensitivity: 18000, background: 2600, saturation: 1000000, curvature: -0.0025, label: 'High sensitivity', description: 'Most sensitive Pb line in this synthetic teaching model.', recommendedMax: 10 },
+  { id: 'pb-217000', element: 'Pb', wavelength: 217.000, sensitivity: 8000, background: 1900, saturation: 1800000, curvature: -0.0012, label: 'Medium sensitivity', description: 'Moderate signal and improved high-concentration headroom.', recommendedMax: 25 },
+  { id: 'pb-283306', element: 'Pb', wavelength: 283.306, sensitivity: 1900, background: 1200, saturation: 2200000, curvature: -0.0004, label: 'Low sensitivity', description: 'Weak trace signal and a broad upper concentration range.', recommendedMax: 100 },
+  { id: 'fe-238204', element: 'Fe', wavelength: 238.204, sensitivity: 46000, background: 3000, saturation: 1300000, curvature: -0.003, label: 'High sensitivity', description: 'High response with early compression in saturation mode.', recommendedMax: 5 },
+  { id: 'fe-259940', element: 'Fe', wavelength: 259.940, sensitivity: 23000, background: 2300, saturation: 1700000, curvature: -0.0018, label: 'Medium sensitivity', description: 'An intermediate line for comparing working ranges.', recommendedMax: 10 },
+  { id: 'fe-239562', element: 'Fe', wavelength: 239.562, sensitivity: 3900, background: 1500, saturation: 2300000, curvature: -0.0007, label: 'Low sensitivity', description: 'Reduced response makes high-concentration measurements possible.', recommendedMax: 100 },
+  { id: 'zn-213857', element: 'Zn', wavelength: 213.857, sensitivity: 65000, background: 2800, saturation: 1200000, curvature: -0.004, label: 'High sensitivity', description: 'Very strong trace response; limited high-concentration headroom.', recommendedMax: 2 },
+  { id: 'zn-206200', element: 'Zn', wavelength: 206.200, sensitivity: 28000, background: 2000, saturation: 1600000, curvature: -0.002, label: 'Medium sensitivity', description: 'Moderate response for a wider calibration range.', recommendedMax: 10 },
+  { id: 'zn-202548', element: 'Zn', wavelength: 202.548, sensitivity: 4800, background: 1400, saturation: 2400000, curvature: -0.0006, label: 'Low sensitivity', description: 'Lower response for high-concentration calibration exercises.', recommendedMax: 100 },
+];
+
+export interface Standard {
+  id: string;
+  name: string;
+  concentration: number;
+  included: boolean;
+  readings: number[];
+}
+
+export interface FitPoint {
+  id: string;
+  concentration: number;
+  signal: number;
+  predictedSignal: number;
+  backCalculated: number;
+  relativeError: number | null;
+  residual: number;
+}
+
+export interface FitResult {
+  slope: number;
+  intercept: number;
+  /** Unweighted 1 - SSE/SST, even for a weighted fit. */
+  r2: number;
+  /** Unweighted residual standard error, cps; n - 2 degrees of freedom. */
+  residualSE: number;
+  /** Relative concentration error (%), nonzero standards, k - 2 df. */
+  relativeSE: number | null;
+  points: FitPoint[];
+}
+
+export function mean(values: number[]): number {
+  if (!values.length) return Number.NaN;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+export function sd(values: number[]): number {
+  if (values.length < 2) return Number.NaN;
+  const average = mean(values);
+  return Math.sqrt(values.reduce((sum, value) => sum + (value - average) ** 2, 0) / (values.length - 1));
+}
+
+export function rsd(values: number[]): number | null {
+  const average = mean(values);
+  const deviation = sd(values);
+  if (!Number.isFinite(average) || !Number.isFinite(deviation) || Math.abs(average) <= Number.EPSILON) return null;
+  return 100 * deviation / Math.abs(average);
+}
+
+/**
+ * Fit standard mean responses. Each standard has one regression weight.
+ * For inverse-concentration weights, blank concentration is floored at the
+ * lowest positive included concentration: w = 1 / max(x, xmin)^power.
+ * The free intercept is never forced through zero.
+ */
+export function fitCalibration(standards: Standard[], weighting: Weighting): FitResult | null {
+  const measured = standards.filter((standard) => standard.included && standard.readings.length > 0);
+  if (measured.length < 3 || new Set(measured.map((standard) => standard.concentration)).size < 3) return null;
+  if (measured.some((standard) => !Number.isFinite(standard.concentration) || standard.concentration < 0 || standard.readings.some((value) => !Number.isFinite(value)))) return null;
+  const minimumPositive = Math.min(...measured.filter((standard) => standard.concentration > 0).map((standard) => standard.concentration));
+  if (!Number.isFinite(minimumPositive)) return null;
+  const power = weighting === '1/x2' ? 2 : weighting === '1/x' ? 1 : 0;
+  const observations = measured.map((standard) => ({
+    standard,
+    x: standard.concentration,
+    y: mean(standard.readings),
+    // Normalize by xmin so weights stay <= 1, preserving the same WLS fit.
+    weight: power ? (minimumPositive / Math.max(standard.concentration, minimumPositive)) ** power : 1,
+  }));
+  const totalWeight = observations.reduce((sum, point) => sum + point.weight, 0);
+  const xMean = observations.reduce((sum, point) => sum + point.weight * point.x, 0) / totalWeight;
+  const yMean = observations.reduce((sum, point) => sum + point.weight * point.y, 0) / totalWeight;
+  const xx = observations.reduce((sum, point) => sum + point.weight * (point.x - xMean) ** 2, 0);
+  const xy = observations.reduce((sum, point) => sum + point.weight * (point.x - xMean) * (point.y - yMean), 0);
+  if (!(xx > 0) || !Number.isFinite(xx) || !Number.isFinite(xy)) return null;
+  const slope = xy / xx;
+  const intercept = yMean - slope * xMean;
+  if (!Number.isFinite(slope) || !Number.isFinite(intercept) || Math.abs(slope) < Number.EPSILON) return null;
+  const points: FitPoint[] = observations.map(({ standard, x, y }) => {
+    const predictedSignal = intercept + slope * x;
+    const backCalculated = (y - intercept) / slope;
+    return {
+      id: standard.id,
+      concentration: x,
+      signal: y,
+      predictedSignal,
+      backCalculated,
+      relativeError: x > 0 ? 100 * (backCalculated - x) / x : null,
+      residual: y - predictedSignal,
+    };
+  });
+  const averageSignal = mean(points.map((point) => point.signal));
+  const sse = points.reduce((sum, point) => sum + point.residual ** 2, 0);
+  const sst = points.reduce((sum, point) => sum + (point.signal - averageSignal) ** 2, 0);
+  if (!(sst > 0) || !Number.isFinite(sse) || !Number.isFinite(sst)) return null;
+  const relativePoints = points.filter((point) => point.relativeError !== null);
+  const relativeSE = relativePoints.length > 2
+    ? Math.sqrt(relativePoints.reduce((sum, point) => sum + point.relativeError! ** 2, 0) / (relativePoints.length - 2))
+    : null;
+  return {
+    slope,
+    intercept,
+    r2: 1 - sse / sst,
+    residualSE: Math.sqrt(sse / (points.length - 2)),
+    relativeSE,
+    points,
+  };
+}
+
+/** Expected net intensity, before random acquisition noise. */
+export function expectedSignal(concentration: number, line: SpectralLine, mode: ResponseMode): number {
+  if (!Number.isFinite(concentration) || concentration < 0) throw new RangeError('Concentration must be finite and nonnegative.');
+  const ideal = line.sensitivity * concentration;
+  if (mode === 'saturation') return -line.saturation * Math.expm1(-ideal / line.saturation);
+  if (mode === 'curvature') return ideal * Math.max(0, 1 + line.curvature * concentration);
+  return ideal;
+}
+
+function seededRandom(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6D2B79F5) >>> 0;
+    let value = state;
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Synthetic independent replicates. Electronic noise, photon noise from
+ * analyte + removed background, and proportional noise scale with 1/sqrt(t).
+ * Background subtraction allows small negative blank signals.
+ */
+export function measureStandard(concentration: number, line: SpectralLine, mode: ResponseMode, replicates: number, integration: number, seed: number): number[] {
+  if (!Number.isInteger(replicates) || replicates < 1 || replicates > 1000) throw new RangeError('Replicates must be an integer from 1 to 1000.');
+  if (!Number.isFinite(integration) || integration <= 0) throw new RangeError('Integration time must be positive.');
+  if (!Number.isFinite(seed)) throw new RangeError('Seed must be finite.');
+  const signal = expectedSignal(concentration, line, mode);
+  const sigma = Math.sqrt(4 ** 2 + Math.abs(signal) + line.background + (0.003 * Math.abs(signal)) ** 2) / Math.sqrt(integration);
+  const random = seededRandom(seed);
+  return Array.from({ length: replicates }, () => {
+    const u = Math.max(random(), Number.MIN_VALUE);
+    const normal = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * random());
+    return signal + normal * sigma;
+  });
+}
+
+/** Estimated instrumental limits in ppm: LOD = 3s/m; LOQ = 10s/m. */
+export function estimatedLimits(standards: Standard[], fit: FitResult | null): { lod: number; loq: number; count: number } | null {
+  if (!fit || !Number.isFinite(fit.slope) || fit.slope <= 0) return null;
+  const blankReadings = standards
+    .filter((standard) => standard.included && standard.concentration === 0)
+    .flatMap((standard) => standard.readings);
+  if (blankReadings.length < 10 || blankReadings.some((value) => !Number.isFinite(value))) return null;
+  const blankSD = sd(blankReadings);
+  if (!Number.isFinite(blankSD)) return null;
+  return { lod: 3 * blankSD / fit.slope, loq: 10 * blankSD / fit.slope, count: blankReadings.length };
+}
