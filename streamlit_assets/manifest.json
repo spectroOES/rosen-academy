@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceHash": "d81d9405052805edecbcd95070f761539aad1b7b337d12397946d48e21141759",
+  "sourceHash": "ade04a4aaf662166e8c989ff7a516c73ea60b51d7486c92daa78230fd4dd5fde",
   "sourceFiles": [
     "index.html",
     "package-lock.json",
@@ -12,6 +12,7 @@
     "src/components/CalibrationCharts.tsx",
     "src/data/calibration-profiles.json",
     "src/lib/empirical.test.ts",
+    "src/lib/forcing.test.ts",
     "src/lib/model.test.ts",
     "src/lib/model.ts",
     "src/lib/teaching-method.ts",
@@ -21,7 +22,7 @@
     "tsconfig.json",
     "vite.config.ts"
   ],
-  "artifactHash": "e2025fb43a594eaa418408255511b8fb8f46472de038ddfef11e23f441f2cf5b",
+  "artifactHash": "4497b8fb05d692f1fa305bdb3829aace55ba3ee76a4f5514303b9093e75259e6",
   "artifact": "index.html",
-  "sizeBytes": 538643
+  "sizeBytes": 540863
 }

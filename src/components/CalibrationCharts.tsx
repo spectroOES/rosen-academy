@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { expectedSignal, mean, sd } from '../lib/model';
-import type { FitResult, ResponseMode, SpectralLine, Standard, Weighting } from '../lib/model';
+import type { FitResult, Forcing, ResponseMode, SpectralLine, Standard, Weighting } from '../lib/model';
 import calibrationData from '../data/calibration-profiles.json';
 
 type Props = {
@@ -10,6 +10,7 @@ type Props = {
   line: SpectralLine;
   mode: ResponseMode;
   weighting: Weighting;
+  forcing?: Forcing;
   selectedId: string | null;
   onSelect: (id: string) => void;
 };
@@ -53,7 +54,7 @@ function niceTicks(min: number, max: number, count = 5): number[] {
   return ticks;
 }
 
-export function CalibrationCharts({ standards, fit, line, mode, weighting, selectedId, onSelect }: Props) {
+export function CalibrationCharts({ standards, fit, line, mode, weighting, forcing, selectedId, onSelect }: Props) {
   const [logX, setLogX] = useState(false);
   const [showModel, setShowModel] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -78,10 +79,15 @@ export function CalibrationCharts({ standards, fit, line, mode, weighting, selec
     return Number.isFinite(deviation) ? [[standard.id, deviation] as const] : [];
   }));
   const concentrationWeighting = weighting === '1/x' || weighting === '1/x2';
-  const measuredBlankAnchor = concentrationWeighting
-    ? measured.find((standard) => standard.included && standard.concentration === 0)
-    : undefined;
-  const anchorId = (fit?.forcing === 'blank' ? fit.anchorId : null) ?? measuredBlankAnchor?.id ?? null;
+  // The fitted constraint is authoritative. Older callers that omit forcing
+  // retain the legacy concentration-weighting default only while no fit exists.
+  const effectiveForcing = fit?.forcing ?? forcing ?? (concentrationWeighting ? 'blank' : 'none');
+  const includedBlanks = measured.filter((standard) => standard.included && standard.concentration === 0);
+  const measuredBlankAnchor = effectiveForcing === 'blank' && includedBlanks.length === 1
+    && includedBlanks[0].readings.every(Number.isFinite) && Number.isFinite(mean(includedBlanks[0].readings))
+    ? includedBlanks[0] : undefined;
+  const anchorId = fit ? (fit.forcing === 'blank' ? fit.anchorId : null) : measuredBlankAnchor?.id ?? null;
+  const omittedBlank = (standard: Standard) => effectiveForcing === 'none' && concentrationWeighting && standard.included && standard.concentration === 0;
   const visible = measured.filter((standard) => !logX || standard.concentration > 0);
   const positive = standards.map((standard) => standard.concentration).filter((value) => value > 0);
   const xMax = Math.max(...positive, 0.01);
@@ -238,8 +244,8 @@ export function CalibrationCharts({ standards, fit, line, mode, weighting, selec
                 <line x1={x - 9} x2={x + 9} y1={lower} y2={lower} />
               </g>;
             })}
-            {visible.map((standard) => <g key={standard.id} role="button" tabIndex={0} className="chart-point" aria-label={`Select ${standard.name}, ${standard.concentration} ppm, ${compact(mean(standard.readings))} cps${standard.id === anchorId ? ', blank anchor; excluded from regression weights' : standard.included ? '' : ', excluded from fit'}`} onClick={() => onSelect(standard.id)} onKeyDown={(event) => selectByKey(event, standard.id)} onMouseEnter={() => setHoveredId(standard.id)} onMouseLeave={() => setHoveredId(null)} onFocus={() => setHoveredId(standard.id)} onBlur={() => setHoveredId(null)}>
-              <title>{standard.name}: {standard.concentration} ppm; mean {mean(standard.readings).toFixed(2)} cps{replicateSD.has(standard.id) ? `; SD ${replicateSD.get(standard.id)} cps` : ''}{standard.id === anchorId ? ' (Blank anchor; excluded from regression weights)' : standard.included ? '' : ' (excluded)'}</title>
+            {visible.map((standard) => <g key={standard.id} role="button" tabIndex={0} className="chart-point" aria-label={`Select ${standard.name}, ${standard.concentration} ppm, ${compact(mean(standard.readings))} cps${standard.id === anchorId ? ', blank anchor; excluded from regression weights' : omittedBlank(standard) ? ', no inverse-concentration weight; free intercept' : standard.included ? '' : ', excluded from fit'}`} onClick={() => onSelect(standard.id)} onKeyDown={(event) => selectByKey(event, standard.id)} onMouseEnter={() => setHoveredId(standard.id)} onMouseLeave={() => setHoveredId(null)} onFocus={() => setHoveredId(standard.id)} onBlur={() => setHoveredId(null)}>
+              <title>{standard.name}: {standard.concentration} ppm; mean {mean(standard.readings).toFixed(2)} cps{replicateSD.has(standard.id) ? `; SD ${replicateSD.get(standard.id)} cps` : ''}{standard.id === anchorId ? ' (Blank anchor; excluded from regression weights)' : omittedBlank(standard) ? ' (No inverse-concentration weight; free intercept)' : standard.included ? '' : ' (excluded)'}</title>
               <circle cx={xScale(standard.concentration)} cy={yScale(mean(standard.readings))} r="13" fill="transparent" />
               {selectedId === standard.id && <circle cx={xScale(standard.concentration)} cy={yScale(mean(standard.readings))} r="10" fill="none" stroke={BLACK} strokeWidth="1.8" />}
               {standard.id === anchorId ? <>
@@ -276,7 +282,7 @@ export function CalibrationCharts({ standards, fit, line, mode, weighting, selec
         <p className="chart-footnote">Red bars show mean ± 1 sample SD of {profile || teaching ? 'simulated replicate intensities' : 'replicate intensities'}, not SEM or a confidence interval. At least two readings are required; very small bars may be subpixel at this scale.</p>
         {teaching && <p className="chart-footnote">High-concentration compression and saturation follow an illustrative line model, not validated detector limits. Compare higher- and lower-sensitivity lines over the same standards. The Linear / Log x buttons change only the concentration axis.</p>}
         {profile && <p className="chart-footnote">Nonzero CSV reference range: {compact(profile.measuredMin)}–{compact(profile.measuredMax)} ppm, plus blank; exposure {referenceExposure} s. The model interpolates exported mean intensities between measured levels and extrapolates beyond {compact(profile.measuredMax)} ppm. Interpolated values are model estimates; this range does not establish validated linearity.{showModel && ' Hollow diamonds show imported CSV means; red bars describe the simulated replicates, not the uncertainty of those source means.'}</p>}
-        {logX && <p className="chart-footnote">The zero-concentration blank is hidden on the log axis. {anchorId !== null ? 'It still fixes the intercept and is excluded from regression weights.' : concentrationWeighting ? 'An enabled, measured blank is required to fix the intercept.' : 'Its regression role is unchanged.'}</p>}
+        {logX && <p className="chart-footnote">The zero-concentration blank is hidden on the log axis. {anchorId !== null ? 'It still fixes the intercept and is excluded from regression weights.' : effectiveForcing === 'blank' ? 'Force to blank requires an included, measured blank to fix the intercept.' : concentrationWeighting ? 'It has no inverse-concentration weight and does not constrain the free intercept.' : 'Its regression role is unchanged.'}</p>}
       </section>
 
       <section className="chart-card" aria-label="Back-calculated concentration errors">

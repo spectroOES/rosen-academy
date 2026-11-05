@@ -10,6 +10,7 @@ export { AXIAL_RADIAL_RATIO, TEACHING_ELEMENTS, TEACHING_LINES, TEACHING_MODEL_V
  */
 export type ResponseMode = 'linear' | 'saturation' | 'curvature' | 'measured' | 'teaching';
 export type Weighting = 'none' | '1/x' | '1/x2' | '1/SD2' | '1/RSD2';
+export type Forcing = 'none' | 'blank';
 
 export interface MeasuredProfile {
   id: string;
@@ -141,7 +142,7 @@ export interface FitPoint {
 export interface FitResult {
   slope: number;
   intercept: number;
-  forcing: 'none' | 'blank';
+  forcing: Forcing;
   anchorId: string | null;
   freeParameters: 1 | 2;
   observationCount: number;
@@ -175,7 +176,7 @@ export function rsd(values: number[]): number | null {
 
 export interface WeightPoint {
   id: string;
-  role: 'fit' | 'anchor';
+  role: 'fit' | 'anchor' | 'omitted';
   sd: number | null;
   rsd: number | null;
   /** Raw, unnormalized regression weight; relative SD uses fractional units. */
@@ -185,7 +186,7 @@ export interface WeightPoint {
 export interface WeightResult {
   points: WeightPoint[];
   error: string | null;
-  forcing: 'none' | 'blank';
+  forcing: Forcing;
   anchor: { id: string; intensity: number } | null;
 }
 
@@ -194,21 +195,30 @@ export interface WeightResult {
  * SD is sample SD of replicate intensities (n - 1 denominator), in cps.
  * RSD diagnostics are 100 * SD / abs(mean), in percent. Qtegra precision weights
  * are 1/SD² and 1/(SD/abs(mean))², respectively. The relative weight therefore
- * equals (100 / RSDpercent)², not 1/RSDpercent². No blank exception or numerical
- * floor is applied: an undefined prerequisite invalidates the fit.
+ * equals (100 / RSDpercent)², not 1/RSDpercent². Explicit forcing is independent
+ * of weighting. A forced blank is an intercept anchor without a numeric weight;
+ * a free inverse-concentration fit omits the zero-concentration blank. Undefined
+ * precision weights on numerical fit observations invalidate the fit.
+ *
+ * Omitting the third argument preserves the earlier two-argument API's legacy
+ * concentration-weighting/blank-forcing link. Interactive callers pass forcing
+ * explicitly so both choices remain independent.
  */
-export function calculateWeights(standards: Standard[], weighting: Weighting): WeightResult {
+export function calculateWeights(standards: Standard[], weighting: Weighting, selectedForcing?: Forcing): WeightResult {
   const measured = standards.filter((standard) => standard.included && standard.readings.length > 0);
-  const forcing = weighting === '1/x' || weighting === '1/x2' ? 'blank' : 'none';
+  const concentrationWeighted = weighting === '1/x' || weighting === '1/x2';
+  const forcing = selectedForcing ?? (concentrationWeighted ? 'blank' : 'none');
   const blanks = measured.filter((standard) => standard.concentration === 0);
   const precision = weighting === '1/SD2' || weighting === '1/RSD2';
   const weightingLabel = weighting === '1/SD2' ? '1/SD²' : weighting === '1/RSD2' ? '1/RSD²' : weighting;
   let error: string | null = forcing === 'blank' && blanks.length !== 1
-    ? `${weighting} weighting requires exactly one included, measured calibration blank to anchor the fit.`
+    ? 'Force to blank requires exactly one included, measured calibration blank to anchor the fit.'
     : null;
   let anchor: WeightResult['anchor'] = null;
   const points = measured.map((standard): WeightPoint => {
-    const point: WeightPoint = { id: standard.id, role: forcing === 'blank' && standard.concentration === 0 ? 'anchor' : 'fit', sd: null, rsd: null, weight: null };
+    const isBlank = standard.concentration === 0;
+    const role: WeightPoint['role'] = isBlank && forcing === 'blank' ? 'anchor' : isBlank && concentrationWeighted ? 'omitted' : 'fit';
+    const point: WeightPoint = { id: standard.id, role, sd: null, rsd: null, weight: null };
     const fail = (reason: string) => {
       error ??= `${standard.name}: ${reason}`;
       return point;
@@ -231,6 +241,7 @@ export function calculateWeights(standards: Standard[], weighting: Weighting): W
       if (blanks.length === 1) anchor = { id: standard.id, intensity: average };
       return point;
     }
+    if (point.role === 'omitted') return point;
     if (precision) {
       if (standard.readings.length < 2) return fail(`${weightingLabel} weighting requires at least 2 replicate readings.`);
       if (point.sd === null || point.sd <= 0) return fail(`${weightingLabel} weighting requires a positive replicate SD.`);
@@ -251,19 +262,20 @@ export function calculateWeights(standards: Standard[], weighting: Weighting): W
 }
 
 /**
- * Fit standard mean responses. Each standard has one regression weight.
- * Legacy Qtegra 1/concentration and 1/concentration² behavior excludes the
- * blank from weighted observations and fixes the intercept to its measured
- * mean intensity (Forcing = Blank). No numeric blank weight or floor is used.
- * Precision weights use inverse sample variance or inverse squared fractional
- * relative SD, as defined by Qtegra's Absolute SD and Relative SD algorithms.
- * None and precision modes retain a free intercept.
+ * Fit standard mean responses with independently selected intercept forcing.
+ * Every included measured standard supplies one mean. A forced blank sets the
+ * intercept and is excluded from numeric fit observations. A free intercept
+ * estimates both parameters; inverse-concentration weights omit zero rather
+ * than inventing a blank coefficient. Precision weights use inverse sample
+ * variance or inverse squared fractional relative SD.
+ *
+ * Omitting selectedForcing preserves the archival two-argument API defaults.
  */
-export function fitCalibration(standards: Standard[], weighting: Weighting): FitResult | null {
+export function fitCalibration(standards: Standard[], weighting: Weighting, selectedForcing?: Forcing): FitResult | null {
   const measured = standards.filter((standard) => standard.included && standard.readings.length > 0);
   if (measured.length < 3 || new Set(measured.map((standard) => standard.concentration)).size < 3) return null;
   if (measured.some((standard) => !Number.isFinite(standard.concentration) || standard.concentration < 0 || standard.readings.some((value) => !Number.isFinite(value)))) return null;
-  const weights = calculateWeights(standards, weighting);
+  const weights = calculateWeights(standards, weighting, selectedForcing);
   const numericWeights = weights.points.filter((point) => point.role === 'fit');
   if (weights.error || numericWeights.some((point) => point.weight === null)) return null;
   if (weights.forcing === 'blank' && !weights.anchor) return null;
@@ -280,7 +292,7 @@ export function fitCalibration(standards: Standard[], weighting: Weighting): Fit
   }));
   if (observations.some((point) => !Number.isFinite(point.weight) || point.weight <= 0)) return null;
   const freeParameters = weights.forcing === 'blank' ? 1 : 2;
-  if (observations.length <= freeParameters) return null;
+  if (observations.length <= freeParameters || new Set(observations.map(point => point.x)).size <= freeParameters) return null;
   let slope: number;
   let intercept: number;
   if (weights.forcing === 'blank') {

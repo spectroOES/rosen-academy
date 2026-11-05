@@ -1,18 +1,22 @@
 # Qtegra legacy inverse-concentration calibration
 
-## Implemented behavior
+## Current interface and historical profile
 
-For the simulator's `1/x` and `1/x²` options (`x` is concentration), use the pre-2.25 workflow documented in the iCAP PRO manual:
+The current simulator has an independent **Intercept** selector: **Free intercept** or **Force to blank**, alongside any weighting option. **Free intercept** fits both slope and intercept; it does not force zero. **Force to blank** fixes the intercept to the acquired included blank mean. Internal-standard correction is **None**.
+
+The pre-2.25 workflow documented below is reproduced by explicitly choosing **Force to blank** with `1/x` or `1/x²` (`x` is concentration). Choosing concentration weighting alone no longer changes the intercept selection in the current interface. Older two-argument numerical-engine callers retain their historical automatic behavior for archival compatibility; the application passes its explicit intercept choice.
+
+## Legacy blank-forced behavior
 
 - The included, measured calibration blank fixes the intercept: `b = mean(blank replicate intensities)`.
 - Zero-concentration blank observations have no numerical regression weight. They are not replaced by an epsilon or the lowest positive concentration.
 - Only included, measured nonzero standards contribute to the weighted fit, with `w = 1/c` or `w = 1/c²`.
 - With that intercept fixed, calculate `slope = sum(w*c*(mean_signal − b)) / sum(w*c²)`.
-- At least two distinct nonzero measured concentrations are required in addition to the blank. The UI labels the blank's role **ANCHOR** and displays **Forcing: Blank (legacy)**.
+- At least two distinct nonzero measured concentrations are required in addition to the blank. The current UI labels the blank's role **ANCHOR** when **Force to blank** is selected.
 - If the blank is absent, unmeasured, excluded, or ambiguous, display an explicit error. Do not substitute a zero intercept or revert to a free fit. This is a simulator validation policy: the supplied documents do not specify every historical missing-blank fallback.
 - The simulator currently models one blank analysis with multiple replicates. It does not implement multiple BLK/AVERAGE BLK blocks or their selection rules.
 
-Switching weighting refits existing readings. Re-measuring the blank changes its mean anchor and therefore the weighted slope, fitted concentrations, and slope-dependent limits. It does not change the acquired nonzero-standard readings.
+Switching weighting or the independent intercept choice refits existing readings. Re-measuring the blank changes its mean anchor and therefore the weighted slope, fitted concentrations, and slope-dependent limits. It does not change the acquired nonzero-standard readings.
 
 ## Source evidence
 
@@ -26,7 +30,7 @@ References are to the PDF files supplied by the user. Full vendor PDFs are not d
 | *Qtegra ISDS Software 2.25 Release Notes*, P/N BRE0066666, Revision B, feature 771937 | 3 / 3 | “Allow forcing to be defined for 1/concentration and 1/concentration2 weighting options.” |
 | Same release notes, issue 864758 | 8 / 8 | Disabling the blank sets forcing to NO rather than ZERO in 2.25. This is not used to infer an undocumented legacy fallback. |
 
-The user requested the legacy automatic blank-forcing behavior, not the new independent None/Zero/Blank controls. Accordingly, this implementation adds no modern forcing selector for the concentration-weighted modes.
+The earlier request selected the automatic legacy behavior. The current request adds independent **Free intercept** and **Force to blank** choices; a Force to zero option is not included. With Free intercept and inverse-concentration weighting, the blank is omitted from numerical observations because `1/0` is undefined, and receives **NO WEIGHT** rather than an anchor role. The positive standards alone determine the fitted intercept and slope.
 
 ## Diagnostics and scope
 
@@ -44,6 +48,6 @@ The displayed **1/SD²** and **1/RSD²** options follow Qtegra's **Absolute SD**
 - `w = 1/SD²`, where SD is the sample SD of replicate net intensities.
 - `w = 1/(SD/abs(mean intensity))² = (mean intensity/SD)²`.
 
-RSD values in tables and CSV are still percentages. Thus `w = (100/RSD%)²`, rather than `1/(RSD%)²`; the common factor10000 does not change the resulting regression but matters when displaying raw coefficients. Both precision modes retain a free intercept and require at least two readings, positive SD and finite positive weights; relative weighting also requires a nonzero mean.
+RSD values in tables and CSV are still percentages. Thus `w = (100/RSD%)²`, rather than `1/(RSD%)²`; the common factor10000 does not change the resulting regression but matters when displaying raw coefficients. Both precision modes support either intercept choice. Numerical fit observations require at least two readings, positive SD and finite positive weights; relative weighting also requires a nonzero mean. A blank fixed as an anchor has no numerical precision weight and therefore needs a finite measured mean rather than its own SD/RSD weight.
 
-Saved browser sessions using the earlier literal `1/SD` or `1/RSD` prototype selections migrate to the corresponding squared mode without discarding measurements.
+Saved browser sessions using the earlier literal `1/SD` or `1/RSD` prototype selections migrate to the corresponding squared mode without discarding measurements. Existing teaching sessions without an explicit intercept choice migrate to their prior effective forcing while preserving readings. Newly created sessions default to Free intercept; subsequent weighting changes do not change the selected intercept choice.

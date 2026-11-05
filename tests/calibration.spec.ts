@@ -10,6 +10,7 @@ async function session(page: Page) {
     lineId: string;
     mode: string;
     weighting: string;
+    forcing: string;
     integration: number;
     standards: StoredStandard[];
   }>;
@@ -47,14 +48,16 @@ test('starts empty, fits demo data, and refits without reacquiring signals', asy
   await expect(page.locator('.equation')).not.toHaveText(unweightedEquation);
   expect(await readings(page)).toEqual(originalReadings);
   expect(await page.locator('.standards-table tbody tr td:nth-child(4)').allTextContents()).toEqual(originalMeans);
-  await expect(page.getByText(/Qtegra legacy: Forcing = Blank/)).toBeVisible();
+  await expect(page.getByLabel('Intercept', { exact: true })).toHaveValue('none');
+  await page.getByLabel('Intercept', { exact: true }).selectOption('blank');
+  expect(await readings(page)).toEqual(originalReadings);
 
   const weightedEquation = await page.locator('.equation').innerText();
   await page.getByRole('checkbox', { name: 'Include Standard 3', exact: true }).uncheck();
   await expect(page.locator('.equation')).not.toHaveText(weightedEquation);
   expect(await readings(page)).toEqual(originalReadings);
   expect((await session(page)).standards.at(-1)?.included).toBe(false);
-  await expect(page.getByText(/2 weighted levels \+ blank anchor/)).toBeVisible();
+  await expect(page.getByText(/2 regression levels \+ blank anchor/)).toBeVisible();
 });
 
 test('changing the channel clears readings but preserves the user’s concentration plan', async ({ page }) => {

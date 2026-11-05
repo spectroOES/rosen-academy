@@ -38,7 +38,7 @@ test('precision weighting refits retained data, exports squared coefficients, an
     }
   }
   await expect(page.locator('.standards-table tbody tr').first().locator('td').nth(4)).toContainText('†');
-  await expect(page.getByText(/Blank RSD and its weight are unstable near zero/)).toBeVisible();
+  await expect(page.getByText(/Calculated blank RSD.*unstable near a zero mean/)).toBeVisible();
   await page.reload();
   await expect(page.getByRole('group', { name: 'Regression weighting' }).getByRole('button', { name: '1/RSD²', exact: true })).toHaveAttribute('aria-pressed', 'true');
   expect(await readings(page)).toEqual(raw);
@@ -60,7 +60,7 @@ test('invalid replicate precision is explained without dropping a standard or fa
     await page.reload();
     await expect(page.getByRole('alert')).toContainText(sample.message);
     await expect(page.getByRole('checkbox', { name: 'Include Calibration blank', exact: true })).toBeChecked();
-    await expect(page.locator('.fit-status')).toHaveText('Weighting needs data');
+    await expect(page.locator('.fit-status')).toHaveText('Fit needs data');
     expect((await session(page)).standards[0].readings).toEqual(sample.values);
   }
   await page.getByRole('checkbox', { name: 'Include Calibration blank', exact: true }).uncheck();

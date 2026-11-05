@@ -68,12 +68,21 @@ Every preset includes the blank:
 
 Changing the analytical wavelength or observation view preserves the user's concentration list and clears incompatible readings, the fitted calibration, and saturation comments. Changing a single concentration clears readings for that standard. Excluding a standard preserves its readings while recalculating the fit. CSV exports use the current generic names, identify the selected observation view, record the teaching model's parameters, and leave the saturation-comment cells empty for unsaturated results.
 
-The model version is **`teaching-v2`**. Teaching sessions use a separate browser-storage key from earlier synthetic and measured-method sessions. Changing the model version prevents old acquisitions from being combined silently with a new response model.
+The model version is **`teaching-v2`**. Teaching sessions use a separate browser-storage key from earlier synthetic and measured-method sessions. Changing the model version prevents old acquisitions from being combined silently with a new response model. The independent intercept control does not alter this response-model version. Existing teaching sessions without a saved intercept choice retain their former effective choice: Force to blank for inverse-concentration weighting, Free intercept otherwise. Their readings are preserved; subsequent weighting changes leave the saved intercept choice unchanged.
 
 ## Calibration calculations
 
 The calibration is still a straight-line fit, **`I = b + m × C`**, with inverse **`C = (I − b) / m`**. `I` is mean intensity in cps, `C` is concentration in ppm, `m` is fitted sensitivity in cps/ppm, and `b` is intercept in cps. Including a flattened region can bias back-calculated concentrations even when the precision is good. Weighting changes the fit's emphasis; it cannot restore a linear physical response.
 
-The earlier Qtegra-compatible weighting behavior remains: **None**, **1/x**, **1/x²**, **1/SD²**, and **1/RSD²**. Inverse-concentration options fix the intercept to the acquired blank mean under the legacy **Forcing = Blank** convention. The blank is an anchor without a numeric inverse-concentration weight. Details and statistical scope remain in [the Qtegra calculation note](qtegra-legacy-calibration.md) and the [README](../README.md).
+The **Intercept** control is independent of **None**, **1/x**, **1/x²**, **1/SD²**, and **1/RSD²** weighting:
+
+- **Free intercept**, the new-session default, fits both slope `m` and intercept `b`. It applies no zero or blank constraint. At least three distinct numerical fit levels are required.
+- **Force to blank** fixes `b` to the included, measured blank mean, then fits only the slope. It requires that blank and at least two distinct positive measured levels. The blank has no numeric weight and the table shows **ANCHOR**, for every weighting option.
+
+With a free intercept and **1/x** or **1/x²**, the zero blank is omitted from the numerical regression because its weight is undefined. The table shows **NO WEIGHT**; three distinct positive levels are required. Other free-intercept weighting modes can use the blank as a normal numerical observation when their precision requirements are satisfied. A blank serving only as a fixed anchor needs a measured mean and does not need its own numerical SD/RSD weight.
+
+Changing intercept or weighting refits the same acquired readings. The slope, intercept, back-calculated concentrations, errors, residual statistics and slope-dependent LOD/LOQ may change; measured replicate values and their means, SDs and RSDs do not. Selecting **Force to blank** with inverse-concentration weighting reproduces the documented legacy regression. Details and statistical scope remain in [the Qtegra calculation note](qtegra-legacy-calibration.md) and the [README](../README.md).
+
+Internal-standard correction is **None**. The current simulator fits generated intensity directly and applies no Ar normalization. The comprehensive report's internally standardized results remain reference information rather than an implemented correction path.
 
 The earlier [measured-data report](calibration-data-report.md) and imported profiles are retained as an archive. They are not the current teaching response curves.

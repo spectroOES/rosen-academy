@@ -860,6 +860,12 @@ h1 {
   color: #000;
   flex: 0 0 auto
 }
+.intercept-control { display: flex; align-items: center; gap: 14px; margin: 16px 22px 8px; font-size: 14px; }
+.intercept-control label { flex-shrink: 0; }
+.intercept-control .select-wrap { flex: 1; min-width: 0; }
+.intercept-control select { font-size: 14px; }
+.intercept-explanation { margin: 8px 22px 18px; font-size: 14px; line-height: 1.6; color: #000; }
+.omitted-weight { font-size: 11px; white-space: nowrap; }
 .equation {
   font-size: 14px;
   line-height: 1.9;

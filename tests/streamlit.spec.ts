@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 type BrowserSession = {
   weighting: string;
+  forcing: string;
   replicates: number;
   standards: { id: string; concentration: number; readings: number[] }[];
 };
@@ -34,9 +35,15 @@ test('Streamlit serves the English laboratory, refits existing demo readings, an
   await frame.getByRole('button', { name: 'Load demo', exact: true }).click();
   await expect(frame.getByText('4/4 measured', { exact: true })).toBeVisible();
   const originalReadings = (await browserSession(frame)).standards.map(standard => standard.readings);
+  await expect(frame.getByLabel('Intercept', { exact: true })).toHaveValue('none');
   const equation = await frame.locator('.equation').innerText();
   await frame.getByRole('group', { name: 'Regression weighting' }).getByRole('button', { name: '1/x²', exact: true }).click();
   await expect(frame.locator('.equation')).not.toHaveText(equation);
+  expect((await browserSession(frame)).standards.map(standard => standard.readings)).toEqual(originalReadings);
+  await expect(frame.getByLabel('Intercept', { exact: true })).toHaveValue('none');
+  const freeEquation = await frame.locator('.equation').innerText();
+  await frame.getByLabel('Intercept', { exact: true }).selectOption('blank');
+  await expect(frame.locator('.equation')).not.toHaveText(freeEquation);
   expect((await browserSession(frame)).standards.map(standard => standard.readings)).toEqual(originalReadings);
 
   const downloading = page.waitForEvent('download');
@@ -45,6 +52,8 @@ test('Streamlit serves the English laboratory, refits existing demo readings, an
   expect(download.suggestedFilename()).toBe('rosen-Mg-279.553-calibration.csv');
   const csv = await readFile((await download.path())!, 'utf8');
   expect(csv).toContain('"Mg","279.553","teaching","1/x²","5"');
+  expect(csv).toContain('"Effective forcing","Blank"');
+  expect(csv).toContain('"Internal standard correction","None"');
   expect(csv.split('\r\n').filter(line => line.startsWith('"Mg",'))).toHaveLength(19);
   for (const value of originalReadings.flat()) expect(csv).toContain(`"${value}"`);
   expect(errors).toEqual([]);
@@ -57,6 +66,7 @@ test('completed calibration and weighting persist when the Streamlit parent relo
   await frame.getByRole('button', { name: 'Load demo', exact: true }).click();
   await expect(frame.getByText('4/4 measured', { exact: true })).toBeVisible();
   await frame.getByRole('group', { name: 'Regression weighting' }).getByRole('button', { name: '1/x', exact: true }).click();
+  await frame.getByLabel('Intercept', { exact: true }).selectOption('blank');
   const saved = await browserSession(frame);
   const equation = await frame.locator('.equation').innerText();
 
@@ -65,6 +75,7 @@ test('completed calibration and weighting persist when the Streamlit parent relo
   await expect(frame.getByText('4/4 measured', { exact: true })).toBeVisible();
   expect(await browserSession(frame)).toEqual(saved);
   await expect(frame.getByLabel('Observation view', { exact: true })).toHaveValue('Axial');
+  await expect(frame.getByLabel('Intercept', { exact: true })).toHaveValue('blank');
   await expect(frame.locator('.equation')).toHaveText(equation);
   await expect(frame.getByRole('group', { name: 'Regression weighting' }).getByRole('button', { name: '1/x', exact: true })).toHaveClass(/active/);
 });
