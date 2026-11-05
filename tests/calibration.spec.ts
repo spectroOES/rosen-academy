@@ -81,6 +81,7 @@ test('acquires all included standards sequentially and requires extra blanks for
   await page.getByRole('button', { name: 'Run calibration', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Stop acquisition', exact: true })).toBeVisible();
   await expect(page.getByLabel('Analyte', { exact: true })).toBeDisabled();
+  await expect(page.getByLabel('Observation view', { exact: true })).toBeDisabled();
   await expect(page.getByText('4/4 measured', { exact: true })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole('button', { name: 'Run calibration', exact: true })).toBeVisible();
   expect((await readings(page)).map((values) => values.length)).toEqual([3, 3, 3, 3]);

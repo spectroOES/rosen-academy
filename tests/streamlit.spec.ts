@@ -29,6 +29,7 @@ test('Streamlit serves the English laboratory, refits existing demo readings, an
   const frame = await laboratory(page);
   await expect(frame.getByText('0/4 measured', { exact: true })).toBeVisible();
   await expect(frame.getByLabel('Analyte', { exact: true })).toBeVisible();
+  await expect(frame.getByLabel('Observation view', { exact: true })).toHaveValue('Radial');
   await expect(frame.getByRole('button', { name: 'Run calibration', exact: true })).toBeVisible();
   await frame.getByRole('button', { name: 'Load demo', exact: true }).click();
   await expect(frame.getByText('4/4 measured', { exact: true })).toBeVisible();
@@ -52,6 +53,7 @@ test('Streamlit serves the English laboratory, refits existing demo readings, an
 test('completed calibration and weighting persist when the Streamlit parent reloads', async ({ page }) => {
   await page.goto('/');
   let frame = await laboratory(page);
+  await frame.getByLabel('Observation view', { exact: true }).selectOption('Axial');
   await frame.getByRole('button', { name: 'Load demo', exact: true }).click();
   await expect(frame.getByText('4/4 measured', { exact: true })).toBeVisible();
   await frame.getByRole('group', { name: 'Regression weighting' }).getByRole('button', { name: '1/x', exact: true }).click();
@@ -62,6 +64,7 @@ test('completed calibration and weighting persist when the Streamlit parent relo
   frame = await laboratory(page);
   await expect(frame.getByText('4/4 measured', { exact: true })).toBeVisible();
   expect(await browserSession(frame)).toEqual(saved);
+  await expect(frame.getByLabel('Observation view', { exact: true })).toHaveValue('Axial');
   await expect(frame.locator('.equation')).toHaveText(equation);
   await expect(frame.getByRole('group', { name: 'Regression weighting' }).getByRole('button', { name: '1/x', exact: true })).toHaveClass(/active/);
 });

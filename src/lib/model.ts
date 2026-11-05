@@ -1,6 +1,6 @@
 import calibrationData from '../data/calibration-profiles.json';
 
-export { TEACHING_ELEMENTS, TEACHING_LINES, TEACHING_MODEL_VERSION } from './teaching-method';
+export { AXIAL_RADIAL_RATIO, TEACHING_ELEMENTS, TEACHING_LINES, TEACHING_MODEL_VERSION } from './teaching-method';
 
 /**
  * Transparent educational ICP-OES model. TEACHING_LINES use export-informed
@@ -124,6 +124,8 @@ export interface Standard {
   concentration: number;
   included: boolean;
   readings: number[];
+  /** True only after the requested replicate sequence completed. */
+  acquisitionComplete?: boolean;
 }
 
 export interface FitPoint {
@@ -384,6 +386,14 @@ export function teachingSD(concentration: number, line: SpectralLine): number {
   if (!line.teaching) throw new RangeError('Teaching SD requires a teaching response.');
   const netSignal = expectedSignal(concentration, line, 'teaching') - line.teaching.baseline;
   return Math.hypot(line.teaching.blankSd, line.teaching.relativeSd * netSignal);
+}
+
+/** A teaching-model saturation condition; callers decide when an acquired result may show it. */
+export function isTeachingSaturated(concentration: number, line: SpectralLine): boolean {
+  validateConcentration(concentration);
+  if (!line.teaching || concentration === 0) return false;
+  const netSignal = expectedSignal(concentration, line, 'teaching') - line.teaching.baseline;
+  return netSignal / line.teaching.plateau >= 0.98;
 }
 
 /**

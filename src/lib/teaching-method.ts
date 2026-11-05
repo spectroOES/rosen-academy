@@ -1,8 +1,10 @@
 import type { SpectralLine, TeachingResponse } from './model';
 
 /** Bump when teaching parameters change so saved acquisitions cannot mix models. */
-export const TEACHING_MODEL_VERSION = 'teaching-v1';
+export const TEACHING_MODEL_VERSION = 'teaching-v2';
 export const TEACHING_ELEMENTS = ['Mg', 'Na', 'As', 'Cd', 'Pb'] as const;
+/** Initial net-sensitivity ratio; compressed intensities approach a shared ceiling. */
+export const AXIAL_RADIAL_RATIO = 5.5;
 
 type Channel = {
   element: typeof TEACHING_ELEMENTS[number];
@@ -34,37 +36,41 @@ const channels: Channel[] = [
 ];
 
 /**
- * Every channel has a smooth, concentration-dependent response. The chosen
- * plateau/slope ratios (15 ppm for higher, 600 ppm for lower sensitivity) are
- * explicit teaching choices. They demonstrate high-level flattening without
- * asserting measured detector saturation or inventing Qtegra invalid flags.
+ * Every wavelength is available in both plasma views. Source-view sensitivity
+ * stays anchored to the export; the other view uses the assumed 5.5 ratio.
+ * The plateau is shared across views, so increased axial sensitivity causes
+ * earlier compression rather than multiplying an already saturated signal.
+ * Original-view plateau/slope ratios of 15 or 600 ppm remain teaching choices.
  */
-export const TEACHING_LINES: SpectralLine[] = channels.map((channel) => {
+export const TEACHING_LINES: SpectralLine[] = channels.flatMap((channel) => {
   const strongest = Math.max(...channels.filter(other => other.element === channel.element).map(other => other.sensitivity));
   const relative = 100 * channel.sensitivity / strongest;
   const relativeLabel = relative < 1 ? relative.toFixed(2) : relative.toFixed(0);
   const roleLabel = channel.role === 'high' ? 'Higher sensitivity' : 'Lower sensitivity';
   const plateau = channel.sensitivity * (channel.role === 'high' ? 15 : 600);
-  return {
-    id: `${channel.element.toLowerCase()}-${channel.wavelength.toFixed(3).replace('.', '')}-${channel.view.toLowerCase()}-${channel.mode.toLowerCase()}`,
-    element: channel.element,
-    wavelength: channel.wavelength,
-    sensitivity: channel.sensitivity,
-    background: 0,
-    saturation: plateau,
-    curvature: 0,
-    label: `${roleLabel} · ${relativeLabel}% response`,
-    description: `${roleLabel} in the selected pair. Initial sensitivity is export-informed; high-concentration saturation is illustrative.${channel.element === 'Cd' ? ' These two Cd lines have similar initial sensitivities (about 9% apart).' : ''}`,
-    recommendedMax: channel.role === 'high' ? 1 : 100,
-    view: channel.view,
-    acquisitionMode: channel.mode,
-    teaching: {
-      role: channel.role,
-      baseline: channel.baseline,
-      blankSd: channel.blankSd,
-      relativeSd: channel.relativeSd,
-      plateau,
-      provenance: 'Initial sensitivity, blank mean/SD, and high-standard relative SD are based on the calibration export. The smooth response, saturation plateau, and noise scaling are teaching assumptions.',
-    },
-  };
+  return (['Radial', 'Axial'] as const).map(view => {
+    const gain = view === channel.view ? 1 : view === 'Axial' ? AXIAL_RADIAL_RATIO : 1 / AXIAL_RADIAL_RATIO;
+    return {
+      id: `${channel.element.toLowerCase()}-${channel.wavelength.toFixed(3).replace('.', '')}-${view.toLowerCase()}-${channel.mode.toLowerCase()}`,
+      element: channel.element,
+      wavelength: channel.wavelength,
+      sensitivity: channel.sensitivity * gain,
+      background: 0,
+      saturation: plateau,
+      curvature: 0,
+      label: `${roleLabel} · ${relativeLabel}% response`,
+      description: `${roleLabel} in the selected pair. Initial sensitivity is export-informed; high-concentration saturation is illustrative.${channel.element === 'Cd' ? ' These two Cd lines have similar initial sensitivities (about 9% apart).' : ''}`,
+      recommendedMax: (channel.role === 'high' ? 1 : 100) / gain,
+      view,
+      acquisitionMode: channel.mode,
+      teaching: {
+        role: channel.role,
+        baseline: channel.baseline,
+        blankSd: channel.blankSd,
+        relativeSd: channel.relativeSd,
+        plateau,
+        provenance: 'Source-view sensitivity, blank mean/SD, and relative SD are export-informed. The other view uses Axial/Radial initial sensitivity = 5.5. Both views share a modeled plateau and unchanged blank/precision scales; these view, response, saturation, and noise assumptions are illustrative.',
+      },
+    };
+  });
 });

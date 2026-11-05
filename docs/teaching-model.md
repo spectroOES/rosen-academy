@@ -1,20 +1,28 @@
 # Five-element calibration teaching model
 
-The current laboratory uses **Mg and Na** as macro-concentration examples and **As, Cd, and Pb** as trace examples. Each element has two selectable lines. The labels compare the two selected channels under the supplied acquisition conditions; they are not universal rankings for every ICP-OES instrument.
+The current laboratory uses **Mg and Na** as macro-concentration examples and **As, Cd, and Pb** as trace examples. Each element has two selectable wavelengths and an independent **Observation view** selector offering **Radial** and **Axial**, giving twenty wavelength/view combinations. The sensitivity labels compare the two selected wavelengths within the same view; they are not universal rankings for every ICP-OES instrument.
 
-## Selected channels
+## Selected wavelengths and reference views
 
-| Element | Higher-sensitivity example | Lower-sensitivity example | Initial sensitivity ratio, higher / lower |
-| --- | --- | --- | ---: |
-| Mg | 279.553 nm · Radial · iFR | 279.079 nm · Radial · iFR | 262× |
-| Na | 589.592 nm · Radial · iFR | 330.237 nm · Radial · iFR | 547× |
-| As | 189.042 nm · Axial · eUV | 193.759 nm · Axial · eUV | 1.40× |
-| Cd | 214.438 nm · Axial · iFR | 226.502 nm · Axial · iFR | 1.09× |
-| Pb | 220.353 nm · Axial · eUV | 216.999 nm · Axial · eUV | 7.15× |
+| Element | Higher-sensitivity wavelength | Lower-sensitivity wavelength | Reference view / mode | Initial sensitivity ratio, higher / lower |
+| --- | --- | --- | --- | ---: |
+| Mg | 279.553 nm | 279.079 nm | Radial · iFR | 262× |
+| Na | 589.592 nm | 330.237 nm | Radial · iFR | 547× |
+| As | 189.042 nm | 193.759 nm | Axial · eUV | 1.40× |
+| Cd | 214.438 nm | 226.502 nm | Axial · iFR | 1.09× |
+| Pb | 220.353 nm | 216.999 nm | Axial · eUV | 7.15× |
 
-All ten wavelength/view/mode combinations occur in the supplied calibration export. Initial sensitivity is the blank-subtracted intensity at the first positive source level divided by that concentration. Blank mean, blank SD, and fractional relative SD at the highest source standard also inform the model's numerical scale. These inputs are stored in [teaching-method.ts](../src/lib/teaching-method.ts).
+All ten wavelength/reference-view/mode combinations in the table occur in the supplied calibration export. These reference views identify the source measurements; both views are selectable for every wavelength in the simulator. Initial reference-view sensitivity is the blank-subtracted intensity at the first positive source level divided by that concentration. Blank mean, blank SD, and fractional relative SD at the highest source standard also inform the model's numerical scale. These inputs are stored in [teaching-method.ts](../src/lib/teaching-method.ts).
 
 Cd's two measured sensitivities differ by only about 9%; As has a modest 40% contrast. Their labels identify the larger and smaller response in this pair without implying a large separation. Qtegra scans with relative-intensity scales and acquisition view/mode visible can confirm these choices or identify additional weaker lines. The simulator does not assign a fabricated lower sensitivity to an unmeasured Cd wavelength.
+
+## Observation view
+
+The teaching ratio is **`k_Axial = 5.5 × k_Radial`**, where `k` is initial net sensitivity in cps/ppm. The reference-view sensitivity in the table remains anchored to the export. For a Radial reference, Axial sensitivity is multiplied by 5.5; for an Axial reference, Radial sensitivity is divided by 5.5. The additional view is derived rather than presented as another measured calibration.
+
+Each wavelength has the **same net-signal plateau in both views**. Increasing Axial sensitivity therefore makes it approach that plateau at a lower concentration. The 5.5 ratio applies to initial sensitivity and approximately to low-concentration net intensities. Once saturation develops, the Axial/Radial intensity ratio decreases toward one as the common plateau is approached.
+
+Blank mean, blank SD, and fractional relative SD are held equal across views as a simplifying assumption. The proportional noise contribution follows the net signal generated in the selected view. Switching view preserves the selected wavelength, concentration list, and exclusions, and clears acquired readings, the fitted curve, and saturation comments.
 
 ## Response model
 
@@ -29,9 +37,9 @@ For each line, the expected intensity is:
 | `k` | Initial sensitivity | cps/ppm |
 | `S` | Illustrative net-signal plateau | cps |
 
-The plateau is chosen as `S = k × c_scale`, with `c_scale = 15 ppm` for higher-sensitivity examples and `600 ppm` for lower-sensitivity examples. This creates a near-linear response at low concentrations and automatic flattening at higher concentrations. There is no student switch between Linear and Saturated response outcomes. The chart's **Linear / Log x** controls change only the concentration axis.
+The plateau is chosen as `S = k_reference × c_scale`, with `c_scale = 15 ppm` for higher-sensitivity examples and `600 ppm` for lower-sensitivity examples. `k_reference` is the source reference-view sensitivity; the selected view supplies `k` in the response equation. This creates a near-linear response at low concentrations and automatic flattening at higher concentrations. There is no student switch between Linear and Saturated response outcomes. The chart's **Linear / Log x** controls change only the concentration axis.
 
-At 100 ppm, a higher-sensitivity example reaches about **99.87% of its modeled plateau**, and its signal per ppm is about **15%** of its initial sensitivity. A lower-sensitivity example retains about **92%** of its initial signal per ppm. Both responses remain finite, smooth, and increasing. The underlying curve is shown separately from the fitted straight calibration line.
+At 100 ppm **in the source reference view**, a higher-sensitivity example reaches about **99.87% of its modeled plateau**, and its signal per ppm is about **15%** of its initial sensitivity. A lower-sensitivity example retains about **92%** of its initial signal per ppm. Both responses remain finite, smooth, and increasing. The underlying curve can be shown separately from the fitted straight calibration line using **Show model**. The table displays no response definitions or classifications before acquisition. Only **Saturation** is shown after a saturated standard completes acquisition, when its expected net intensity reaches at least **98% of the illustrative plateau**. Unmeasured standards, partial acquisitions, blanks, and unsaturated results receive no response comment. This comment describes modeled saturation and does not assert a Qtegra detector flag.
 
 **The plateaus and their differences are teaching assumptions.** They do not fit the source calibration's complete response, establish real detector saturation thresholds, or predict Qtegra `N/A`, peak-pixel, or adjacent-pixel flags. In particular, the original high-level Mg results were numeric without saturation flags; Na was nearly proportional across its measured high-concentration standards. The present artificial flattening is intentional for demonstrating calibration-range selection. Cd's and As's distinct teaching plateaus are not evidence of equally large differences in their real working ranges.
 
@@ -58,9 +66,9 @@ Every preset includes the blank:
 | High range | 10, 25, 50, 100 |
 | Trace range | 0.01, 0.05, 0.1, 0.5, 1 |
 
-Changing the analytical channel preserves the user's concentration list and clears incompatible readings. Changing a single concentration clears readings for that standard. Excluding a standard preserves its readings while recalculating the fit. CSV exports use the current generic names and record the teaching model's parameters.
+Changing the analytical wavelength or observation view preserves the user's concentration list and clears incompatible readings, the fitted calibration, and saturation comments. Changing a single concentration clears readings for that standard. Excluding a standard preserves its readings while recalculating the fit. CSV exports use the current generic names, identify the selected observation view, record the teaching model's parameters, and leave the saturation-comment cells empty for unsaturated results.
 
-The model version is **`teaching-v1`**. Teaching sessions use a separate browser-storage key from earlier synthetic and measured-method sessions. Changing the model version prevents old acquisitions from being combined silently with a new response model.
+The model version is **`teaching-v2`**. Teaching sessions use a separate browser-storage key from earlier synthetic and measured-method sessions. Changing the model version prevents old acquisitions from being combined silently with a new response model.
 
 ## Calibration calculations
 
