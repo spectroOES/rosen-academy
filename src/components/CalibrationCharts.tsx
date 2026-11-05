@@ -86,7 +86,8 @@ export function CalibrationCharts({ standards, fit, line, mode, weighting, selec
   const positive = standards.map((standard) => standard.concentration).filter((value) => value > 0);
   const xMax = Math.max(...positive, 0.01);
   const xMin = logX ? Math.min(...positive, xMax / 10) : 0;
-  const profile = line.profile;
+  const teaching = Boolean(line.teaching);
+  const profile = teaching ? undefined : line.profile;
   const referenceExposure = calibrationData.source.referenceExposureSeconds;
   const visibleReferencePoints = profile?.points.filter((point) => point.concentration >= xMin && point.concentration <= xMax) ?? [];
   const xRange = logX ? Math.log10(xMax) - Math.log10(xMin) : xMax;
@@ -189,10 +190,10 @@ export function CalibrationCharts({ standards, fit, line, mode, weighting, selec
         <div className="card-heading">
           <div>
             <h2>Calibration curve</h2>
-            <p className="chart-subtitle">{line.element} {line.wavelength.toFixed(3)} nm{profile && <> · {line.view ?? profile.view} · {line.acquisitionMode ?? profile.mode} · {referenceExposure} s reference</>} <span aria-hidden="true">·</span> Intensity vs. concentration</p>
+            <p className="chart-subtitle">{line.element} {line.wavelength.toFixed(3)} nm{(profile || teaching) && <> · {line.view ?? profile?.view} · {line.acquisitionMode ?? profile?.mode} · {referenceExposure} s {teaching ? 'exposure' : 'reference'}</>} <span aria-hidden="true">·</span> Intensity vs. concentration</p>
           </div>
           <div className="chart-controls">
-            <label className="model-toggle" title={profile ? 'Show the empirical response interpolated from exported means, source reference points, and extrapolation beyond the observed range.' : 'Show the expected synthetic response before replicate noise is added.'}><input type="checkbox" checked={showModel} onChange={(event) => setShowModel(event.target.checked)} />Show model</label>
+            <label className="model-toggle" title={teaching ? 'Show the illustrative line response, including gradual saturation, before replicate noise is added.' : profile ? 'Show the empirical response interpolated from exported means, source reference points, and extrapolation beyond the observed range.' : 'Show the expected synthetic response before replicate noise is added.'}><input type="checkbox" checked={showModel} onChange={(event) => setShowModel(event.target.checked)} />Show model</label>
             <div className="axis-toggle" aria-label="Concentration axis scale">
               <button type="button" aria-pressed={!logX} onClick={() => setLogX(false)}>Linear</button>
               <button type="button" aria-pressed={logX} onClick={() => setLogX(true)}>Log x</button>
@@ -200,7 +201,7 @@ export function CalibrationCharts({ standards, fit, line, mode, weighting, selec
           </div>
         </div>
         <div className="chart-canvas" ref={mainChart.ref}>
-        <svg className="chart-svg" style={{ height: H, flex: '0 0 auto' }} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Calibration graph showing ${visible.length} ${profile ? 'simulated' : 'measured'} standards with a ${logX ? 'logarithmic' : 'linear'} concentration axis`}>
+        <svg className="chart-svg" style={{ height: H, flex: '0 0 auto' }} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Calibration graph showing ${visible.length} ${profile || teaching ? 'simulated' : 'measured'} standards with a ${logX ? 'logarithmic' : 'linear'} concentration axis`}>
           <defs><clipPath id={`${id}-clip`}><rect x={LEFT - 10} y={TOP - 10} width={PLOT_W + 20} height={BOTTOM - TOP + 20} /></clipPath></defs>
           {niceTicks(yMin, yMax).map((tick) => <g key={`y-${tick}`}>
             <line x1={LEFT} x2={W - RIGHT} y1={yScale(tick)} y2={yScale(tick)} stroke={BLACK} strokeOpacity="0.2" strokeDasharray="3 4" />
@@ -264,15 +265,16 @@ export function CalibrationCharts({ standards, fit, line, mode, weighting, selec
         </svg>
         </div>
         <div className="chart-legend">
-          <span><i className="legend-dot" />{profile ? 'Simulated standard' : 'Measured standard'}</span>
+          <span><i className="legend-dot" />{profile || teaching ? 'Simulated standard' : 'Measured standard'}</span>
           <span><i className="legend-line" />Linear fit</span>
           <span><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M9 2V16 M4 2H14 M4 16H14" fill="none" stroke={RED} strokeWidth="2" /></svg>±1 SD (replicates)</span>
           {anchorId !== null && <span title="The measured blank fixes the intercept and is excluded from regression weights."><i className="legend-anchor" />Blank anchor</span>}
           {measured.some((standard) => !standard.included) && <span><i className="legend-dot" style={{ background: GRAY, border: `2px solid ${BLACK}` }} />Excluded from fit</span>}
-          {showModel && <span><i className="legend-line" style={{ borderColor: BLACK, borderTopStyle: 'dashed' }} />{profile ? 'Measured-method reference' : 'Synthetic response model'}</span>}
+          {showModel && <span><i className="legend-line" style={{ borderColor: BLACK, borderTopStyle: 'dashed' }} />{teaching ? 'Teaching response' : profile ? 'Measured-method reference' : 'Synthetic response model'}</span>}
           {showModel && profile && <span><i className="legend-reference" />Imported CSV mean</span>}
         </div>
-        <p className="chart-footnote">Red bars show mean ± 1 sample SD of {profile ? 'simulated replicate intensities' : 'replicate intensities'}, not SEM or a confidence interval. At least two readings are required; very small bars may be subpixel at this scale.</p>
+        <p className="chart-footnote">Red bars show mean ± 1 sample SD of {profile || teaching ? 'simulated replicate intensities' : 'replicate intensities'}, not SEM or a confidence interval. At least two readings are required; very small bars may be subpixel at this scale.</p>
+        {teaching && <p className="chart-footnote">High-concentration compression and saturation follow an illustrative line model, not validated detector limits. Compare higher- and lower-sensitivity lines over the same standards. The Linear / Log x buttons change only the concentration axis.</p>}
         {profile && <p className="chart-footnote">Nonzero CSV reference range: {compact(profile.measuredMin)}–{compact(profile.measuredMax)} ppm, plus blank; exposure {referenceExposure} s. The model interpolates exported mean intensities between measured levels and extrapolates beyond {compact(profile.measuredMax)} ppm. Interpolated values are model estimates; this range does not establish validated linearity.{showModel && ' Hollow diamonds show imported CSV means; red bars describe the simulated replicates, not the uncertainty of those source means.'}</p>}
         {logX && <p className="chart-footnote">The zero-concentration blank is hidden on the log axis. {anchorId !== null ? 'It still fixes the intercept and is excluded from regression weights.' : concentrationWeighting ? 'An enabled, measured blank is required to fix the intercept.' : 'Its regression role is unchanged.'}</p>}
       </section>

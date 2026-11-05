@@ -1,11 +1,14 @@
 import calibrationData from '../data/calibration-profiles.json';
 
+export { TEACHING_ELEMENTS, TEACHING_LINES, TEACHING_MODEL_VERSION } from './teaching-method';
+
 /**
- * Transparent educational ICP-OES model. METHOD_LINES use exported instrument
- * means and SDs; LINES retain the earlier synthetic teaching examples.
- * Signals are background-corrected intensity rates in counts per second.
+ * Transparent educational ICP-OES model. TEACHING_LINES use export-informed
+ * sensitivity/precision with explicit illustrative saturation. METHOD_LINES
+ * retain exported means/SDs; LINES retain the earlier synthetic examples.
+ * Signal units are intensity rates in counts per second.
  */
-export type ResponseMode = 'linear' | 'saturation' | 'curvature' | 'measured';
+export type ResponseMode = 'linear' | 'saturation' | 'curvature' | 'measured' | 'teaching';
 export type Weighting = 'none' | '1/x' | '1/x2' | '1/SD2' | '1/RSD2';
 
 export interface MeasuredProfile {
@@ -47,6 +50,19 @@ export interface SpectralLine {
   view?: MeasuredProfile['view'];
   acquisitionMode?: MeasuredProfile['mode'];
   mixture?: MeasuredProfile['mixture'];
+  teaching?: TeachingResponse;
+}
+
+/** Illustrative response parameters, not a detector full-well measurement. */
+export interface TeachingResponse {
+  role: 'high' | 'low';
+  baseline: number;
+  blankSd: number;
+  /** Fractional replicate SD of the net response at the 5 s reference exposure. */
+  relativeSd: number;
+  /** Asymptotic net intensity, in cps. All teaching plateaus are assumptions. */
+  plateau: number;
+  provenance: string;
 }
 
 export const ELEMENTS = ['Cu', 'Cd', 'Pb', 'Fe', 'Zn'];
@@ -362,13 +378,25 @@ export function measuredSD(concentration: number, line: SpectralLine): number {
   return Math.max(profile.referenceBlankSd, last.sd * Math.abs(signal) / Math.max(Math.abs(last.mean), 1e-9));
 }
 
+/** Total illustrative replicate SD; the blank term remains finite near zero. */
+export function teachingSD(concentration: number, line: SpectralLine): number {
+  validateConcentration(concentration);
+  if (!line.teaching) throw new RangeError('Teaching SD requires a teaching response.');
+  const netSignal = expectedSignal(concentration, line, 'teaching') - line.teaching.baseline;
+  return Math.hypot(line.teaching.blankSd, line.teaching.relativeSd * netSignal);
+}
+
 /**
- * Expected intensity before random acquisition noise. Imported channels
- * always follow measured means, including their nonzero blank. Straight-line
- * segments preserve observed compression; extrapolation adds no saturation.
+ * Expected intensity before random acquisition noise. Teaching channels always
+ * use their smooth saturation curve. Archival imported channels always follow
+ * measured means, including the nonzero blank; their extrapolation adds no cap.
  */
 export function expectedSignal(concentration: number, line: SpectralLine, mode: ResponseMode): number {
   validateConcentration(concentration);
+  if (line.teaching) {
+    const { baseline, plateau } = line.teaching;
+    return baseline - plateau * Math.expm1(-line.sensitivity * concentration / plateau);
+  }
   if (line.profile) return measuredValue(concentration, line.profile, 'mean');
   const ideal = line.sensitivity * concentration;
   if (mode === 'saturation') return -line.saturation * Math.expm1(-ideal / line.saturation);
@@ -389,7 +417,9 @@ function seededRandom(seed: number): () => number {
 
 /**
  * Synthetic independent Gaussian replicates, not the instrument's raw runs.
- * Imported channels use the exported SD without adding electronic, photon or
+ * Teaching channels combine a blank SD and proportional net-signal SD, using
+ * export-informed scales. Archival imported channels use the exported SD
+ * without adding electronic, photon or
  * proportional noise a second time. Their reference exposure is 5 s; an
  * optional 1/sqrt(t) precision scaling is a noise-only teaching assumption and
  * does not change the measured response curve or predict detector saturation.
@@ -400,7 +430,9 @@ export function measureStandard(concentration: number, line: SpectralLine, mode:
   if (!Number.isFinite(integration) || integration <= 0) throw new RangeError('Integration time must be positive.');
   if (!Number.isFinite(seed)) throw new RangeError('Seed must be finite.');
   const signal = expectedSignal(concentration, line, mode);
-  const sigma = line.profile
+  const sigma = line.teaching
+    ? teachingSD(concentration, line) * Math.sqrt(5 / integration)
+    : line.profile
     ? measuredSD(concentration, line) * Math.sqrt(calibrationData.source.referenceExposureSeconds / integration)
     : Math.sqrt(4 ** 2 + Math.abs(signal) + line.background + (0.003 * Math.abs(signal)) ** 2) / Math.sqrt(integration);
   const random = seededRandom(seed);

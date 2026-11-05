@@ -3,12 +3,12 @@ import type { Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 
-const methodData = JSON.parse(readFileSync(new URL('../src/data/calibration-profiles.json', import.meta.url), 'utf8'));
+const modelVersion = readFileSync(new URL('../src/lib/teaching-method.ts', import.meta.url), 'utf8').match(/TEACHING_MODEL_VERSION\s*=\s*['"]([^'"]+)['"]/)![1];
 
-const KEY = 'rosen-calibration-v2-measured';
+const KEY = 'rosen-calibration-v3-teaching';
 const blankReadings = [1, 3, 1, 3, 1, 3, 1, 3, 1, 3];
 const fixture = {
-  sourceHash: methodData.source.sha256, lineId: 'cu-324754-axial-ifr', mode: 'measured', weighting: 'none', replicates: 3, integration: 5, sequence: 1,
+  sourceHash: modelVersion, lineId: 'mg-279553-radial-ifr', mode: 'teaching', weighting: 'none', replicates: 3, integration: 5, sequence: 1,
   standards: [
     { id: 'b', name: 'Calibration blank', concentration: 0, included: true, readings: blankReadings },
     { id: 's1', name: 'Standard 1', concentration: 1, included: true, readings: [4, 5, 6] },
@@ -50,7 +50,7 @@ test('legacy concentration weights fix the blank intercept and export no numeric
     expect(metric('Fitted parameter count')).toBe(1);
     expect(metric('Residual SE degrees of freedom')).toBe(2);
     expect(metric('Estimated instrumental LOD (ppm)')).toBeCloseTo(3 * Math.sqrt(10 / 9) / expectedSlope, 12);
-    const blankRow = rows.find(row => row[0] === 'Cu' && row[5] === 'Calibration blank')!;
+    const blankRow = rows.find(row => row[0] === 'Mg' && row[5] === 'Calibration blank')!;
     expect(blankRow.at(-2)).toBe('anchor');
     expect(blankRow.at(-1)).toBe('');
   }

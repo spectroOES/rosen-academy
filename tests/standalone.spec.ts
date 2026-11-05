@@ -22,7 +22,7 @@ test('self-contained HTML supports real offline acquisition and CSV export', asy
   await page.getByRole('link', { name: 'Rosen Academy home' }).click();
   await expect(page).toHaveURL(simulatorURL + '#top');
   await expect(page.getByLabel('Response model', { exact: true })).toHaveCount(0);
-  await expect(page.getByLabel('Reference exposure', { exact: true })).toHaveValue('5 s');
+  await expect(page.getByLabel('Exposure', { exact: true })).toHaveValue('5 s');
   await page.getByRole('button', { name: 'Run calibration', exact: true }).click();
   await expect(page.getByText('4/4 measured', { exact: true })).toBeVisible({ timeout: 15000 });
   await expect(page.getByRole('button', { name: 'Run calibration', exact: true })).toBeVisible();

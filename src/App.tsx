@@ -1,14 +1,28 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, ArrowDownToLine, ArrowRight, Beaker, ChevronDown, CircleHelp, FlaskConical, Info, ListRestart, LoaderCircle, Play, Plus, RotateCcw, Settings2, Square, Trash2, Waves, X } from 'lucide-react';
 import { CalibrationCharts } from './components/CalibrationCharts';
-import { METHOD_ELEMENTS as ELEMENTS, METHOD_LINES as LINES, calculateWeights, describeRange, estimatedLimits, fitCalibration, mean, measureStandard, rsd, sd } from './lib/model';
+import { TEACHING_ELEMENTS as ELEMENTS, TEACHING_LINES as LINES, TEACHING_MODEL_VERSION, calculateWeights, expectedSignal, estimatedLimits, fitCalibration, mean, measureStandard, rsd, sd } from './lib/model';
 import type { ResponseMode, SpectralLine, Standard, Weighting } from './lib/model';
-import methodData from './data/calibration-profiles.json';
 
-const STORAGE_KEY = 'rosen-calibration-v2-measured';
-const DEFAULT_LINE = LINES.find(line => line.id === 'cu-324754-axial-ifr')!;
-const SOURCE_HASH = methodData.source.sha256;
-const SUPPORT_LABELS = { measured: 'Reference level', interpolated: 'Interpolated', extrapolated: 'Extrapolated' };
+const STORAGE_KEY = 'rosen-calibration-v3-teaching';
+const DEFAULT_LINE = LINES.find(line => line.id === 'mg-279553-radial-ifr')!;
+const SOURCE_HASH = TEACHING_MODEL_VERSION;
+const STANDARD_SETS = {
+  low: { label: 'Low range: 0.1, 0.5, 1 ppm', values: [0.1, 0.5, 1] },
+  wide: { label: 'Wide range: 0.1 to 100 ppm', values: [0.1, 0.5, 1, 10, 25, 50, 100] },
+  high: { label: 'High range: 10, 25, 50, 100 ppm', values: [10, 25, 50, 100] },
+  trace: { label: 'Trace range: 0.01 to 1 ppm', values: [0.01, 0.05, 0.1, 0.5, 1] },
+};
+function responseState(concentration: number, line: SpectralLine) {
+  if (concentration === 0) return { label: 'Blank', kind: 'blank' };
+  const net = expectedSignal(concentration, line, 'teaching') - line.teaching!.baseline;
+  if (net / line.teaching!.plateau >= 0.98) return { label: 'Modeled saturation', kind: 'saturated' };
+  if (net / (line.sensitivity * concentration) < 0.9) return { label: 'Compressed response', kind: 'compressed' };
+  return { label: 'Near-linear response', kind: 'linear' };
+}
+function orderStandards(rows: Standard[]): Standard[] {
+  return [...rows].sort((a, b) => a.concentration - b.concentration).map((row, i) => ({ ...row, name: row.concentration === 0 ? 'Calibration blank' : `Standard ${i}` }));
+}
 const WEIGHTING_OPTIONS: { value: Weighting; label: string }[] = [
   { value: 'none', label: 'None' }, { value: '1/x', label: '1/x' }, { value: '1/x2', label: '1/x²' },
   { value: '1/SD2', label: '1/SD²' }, { value: '1/RSD2', label: '1/RSD²' },
@@ -20,9 +34,9 @@ const WEIGHTING_NOTES: Record<Weighting, string> = {
   '1/SD2': 'Qtegra Absolute SD: w = 1 / SD², using the sample SD of replicate intensities (cps). ',
   '1/RSD2': 'Qtegra Relative SD: w = 1 / (SD / |mean|)² = (100 / RSD%)². The table reports RSD in percent. Blank RSD and its weight are unstable near zero. ',
 };
-const ELEMENT_NAMES: Record<string, string> = { Cu: 'Copper', Cd: 'Cadmium', Pb: 'Lead', Fe: 'Iron', Zn: 'Zinc', Mg: 'Magnesium', Ca: 'Calcium', P: 'Phosphorus', Ti: 'Titanium', Sb: 'Antimony' };
-function initialStandards(line: SpectralLine = DEFAULT_LINE): Standard[] {
-  return line.profile!.points.map((point, i) => ({ id: `std-${i}`, name: i === 0 ? 'Calibration blank' : `Standard ${i}`, concentration: point.concentration, included: true, readings: [] }));
+const ELEMENT_NAMES: Record<string, string> = { Mg: 'Magnesium', Na: 'Sodium', As: 'Arsenic', Cd: 'Cadmium', Pb: 'Lead' };
+function initialStandards(concentrations: number[] = STANDARD_SETS.low.values): Standard[] {
+  return [0, ...concentrations].map((concentration, i) => ({ id: `std-${i}`, name: i === 0 ? 'Calibration blank' : `Standard ${i}`, concentration, included: true, readings: [] }));
 }
 interface SavedState { sourceHash: string; lineId: string; mode: ResponseMode; weighting: Weighting; replicates: number; integration: number; standards: Standard[]; sequence: number }
 function loadSession(): SavedState | null {
@@ -34,9 +48,9 @@ function loadSession(): SavedState | null {
     if (parsed.weighting === '1/SD') parsed.weighting = '1/SD2';
     if (parsed.weighting === '1/RSD') parsed.weighting = '1/RSD2';
     const s = parsed as SavedState;
-    if (!LINES.some(l => l.id === s.lineId) || s.mode !== 'measured' || s.sourceHash !== SOURCE_HASH || !WEIGHTING_OPTIONS.some(option => option.value === s.weighting)) return null;
+    if (!LINES.some(l => l.id === s.lineId) || s.mode !== 'teaching' || s.sourceHash !== SOURCE_HASH || !WEIGHTING_OPTIONS.some(option => option.value === s.weighting)) return null;
     if (![3, 5, 10].includes(s.replicates) || s.integration !== 5 || !Number.isInteger(s.sequence) || s.sequence < 0) return null;
-    if (!Array.isArray(s.standards) || s.standards.length < 3 || s.standards.length > 20) return null;
+    if (!Array.isArray(s.standards) || s.standards.length < 1 || s.standards.length > 16) return null;
     if (new Set(s.standards.map(row => row.id)).size !== s.standards.length || new Set(s.standards.map(row => row.concentration)).size !== s.standards.length) return null;
     if (!s.standards.every(row => typeof row.id === 'string' && typeof row.name === 'string' && typeof row.included === 'boolean' && Number.isFinite(row.concentration) && (row.concentration === 0 || row.concentration >= 0.01 && row.concentration <= 100) && Array.isArray(row.readings) && row.readings.every(Number.isFinite))) return null;
     if (s.standards.filter(row => row.concentration === 0).length !== 1) return null;
@@ -58,7 +72,7 @@ function exportCSV(rows: string[][], filename: string) {
 export default function App() {
   const [saved] = useState(loadSession);
   const [lineId, setLineId] = useState(saved?.lineId ?? DEFAULT_LINE.id);
-  const mode: ResponseMode = 'measured';
+  const mode: ResponseMode = 'teaching';
   const [weighting, setWeighting] = useState<Weighting>(saved?.weighting ?? 'none');
   const [replicates, setReplicates] = useState(saved?.replicates ?? 3);
   const integration = 5;
@@ -66,17 +80,18 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(saved?.standards[0]?.id ?? 'std-0');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [progress, setProgress] = useState('');
-  const [notice, setNotice] = useState(() => { try { return !saved && localStorage.getItem('rosen-calibration-v1') ? 'The measured-method model starts a new session. Your previous synthetic session remains stored separately in this browser.' : ''; } catch { return ''; } });
+  const [notice, setNotice] = useState(() => { try { return !saved && (localStorage.getItem('rosen-calibration-v1') || localStorage.getItem('rosen-calibration-v2-measured')) ? 'This teaching model starts a new session. Your previous sessions remain stored separately in this browser.' : ''; } catch { return ''; } });
   const [helpOpen, setHelpOpen] = useState(false);
   const [concentrationDraft, setConcentrationDraft] = useState<Record<string, string>>({});
+  const [standardSet, setStandardSet] = useState<keyof typeof STANDARD_SETS>('low');
+  const [levelsDraft, setLevelsDraft] = useState('10, 25, 50, 100');
   const [storageAvailable, setStorageAvailable] = useState(true);
   const sequence = useRef(saved?.sequence ?? 0);
   const runToken = useRef(0);
   const latestRows = useRef(standards); latestRows.current = standards;
   const isBusy = busyId !== null;
   const line = LINES.find(l => l.id === lineId)!;
-  const profile = line.profile!;
-  const extrapolated = standards.filter(row => row.concentration > profile.measuredMax).length;
+  const teaching = line.teaching!;
   const weightInfo = useMemo(() => calculateWeights(standards, weighting), [standards, weighting]);
   const weightsById = useMemo(() => new Map(weightInfo.points.map(point => [point.id, point])), [weightInfo]);
   const usesRsdWeighting = weighting === '1/RSD2';
@@ -123,10 +138,9 @@ export default function App() {
   }
   function changeLine(id: string) {
     if (id === lineId) return;
-    const next = LINES.find(line => line.id === id)!;
     runToken.current++; setBusyId(null); setProgress('');
-    setLineId(id); setStandards(initialStandards(next)); setSelectedId('std-0'); setConcentrationDraft({});
-    setNotice('Channel changed. The exported standard concentrations for this mixture have been loaded; acquire new readings.');
+    setLineId(id); setStandards(rows => rows.map(row => ({ ...row, readings: [] }))); setConcentrationDraft({});
+    setNotice('Channel changed. Your concentration levels are retained; acquire new readings for this line.');
   }
   async function acquire(ids: string[], blankCount?: number) {
     if (isBusy) return;
@@ -162,7 +176,7 @@ export default function App() {
     sequence.current++;
     setStandards(rows => rows.map((row, i) => ({ ...row, readings: measureStandard(row.concentration, line, mode, row.concentration === 0 ? 10 : replicates, integration, sequence.current * 100003 + i * 7919) })));
     setSelectedId(blank.id);
-    setNotice('Demo acquired: simulated replicates from this channel’s measured mean/SD reference, including 10 blank readings. Try a different weighting or exclude the highest standard.');
+    setNotice('Demo acquired: simulated readings, including 10 blank readings. Add high standards to explore compression, or compare the two lines.');
   }
   function updateConcentration(id: string) {
     const text = concentrationDraft[id];
@@ -178,23 +192,43 @@ export default function App() {
     setConcentrationDraft(draft => { const next = { ...draft }; delete next[id]; return next; });
   }
   function addStandard() {
-    const available = [0.05, 0.5, 5, 25, 50, 0.02, 0.2, 2, 20, 75].find(c => !standards.some(row => row.concentration === c));
+    const available = [0.01, 0.05, 0.1, 0.5, 1, 10, 25, 50, 100, 0.02, 0.2, 2, 5, 20, 75].find(c => !standards.some(row => row.concentration === c));
     if (available === undefined) { setNotice('All suggested levels are present. Edit an existing standard to change its concentration.'); return; }
     const id = `std-${Date.now()}`;
-    const nextNumber = 1 + Math.max(0, ...standards.map(row => Number(row.name.match(/^Standard (\d+)$/)?.[1] ?? 0)));
-    setStandards(rows => [...rows, { id, name: `Standard ${nextNumber}`, concentration: available, included: true, readings: [] }].sort((a, b) => a.concentration - b.concentration));
+    setStandards(rows => orderStandards([...rows, { id, name: '', concentration: available, included: true, readings: [] }]));
     setSelectedId(id);
+  }
+  function addLevels() {
+    const tokens = levelsDraft.trim().split(/[\s,;]+/).filter(Boolean);
+    const values = tokens.map(Number);
+    if (!values.length || values.some(value => !Number.isFinite(value) || value < 0.01 || value > 100)) {
+      setNotice('Enter concentrations from 0.01 to 100 ppm, separated by commas. No levels were added.'); return;
+    }
+    const additions = [...new Set(values)].filter(value => !standards.some(row => row.concentration === value));
+    if (standards.length + additions.length > 16) { setNotice('Use at most 15 positive standards plus the calibration blank. No levels were added.'); return; }
+    if (!additions.length) { setNotice('Those concentrations are already present. Existing readings have been retained.'); return; }
+    const stamp = Date.now();
+    setStandards(rows => orderStandards([...rows, ...additions.map((concentration, i) => ({ id: `std-${stamp}-${i}`, name: '', concentration, included: true, readings: [] }))]));
+    setNotice(`${additions.length} concentration level(s) added. Existing readings have been retained.`);
+  }
+  function applyStandardSet() {
+    setStandards(initialStandards(STANDARD_SETS[standardSet].values)); setSelectedId('std-0'); setConcentrationDraft({});
+    setNotice('Standard set applied. Previous readings have been cleared; acquire the new calibration.');
+  }
+  function removeStandard(id: string) {
+    setStandards(rows => orderStandards(rows.filter(row => row.id !== id)));
+    if (selectedId === id) setSelectedId(blank.id);
   }
   function resetSession() {
     if (!window.confirm('Clear all measurements and restore the default standards and method?')) return;
-    sequence.current = 0; setLineId(DEFAULT_LINE.id); setWeighting('none'); setReplicates(3); setStandards(initialStandards()); setSelectedId('std-0'); setConcentrationDraft({}); setNotice('Session reset. Ready for a new calibration.');
+    sequence.current = 0; setLineId(DEFAULT_LINE.id); setWeighting('none'); setReplicates(3); setStandards(initialStandards()); setSelectedId('std-0'); setConcentrationDraft({}); setStandardSet('low'); setLevelsDraft('10, 25, 50, 100'); setNotice('Session reset. Ready for a new calibration.');
   }
   function download() {
-    const rows = [['Element', 'Line (nm)', 'Response basis', 'Weighting', 'Integration (s)', 'Standard', 'Nominal (ppm)', 'Included', 'Replicate', 'Intensity (cps)', 'Mean (cps)', 'SD (cps)', 'RSD (%)', 'Back-calculated (ppm)', 'Error (%)', 'Reference support', 'Regression role', 'Regression weight']];
+    const rows = [['Element', 'Line (nm)', 'Response basis', 'Weighting', 'Integration (s)', 'Standard', 'Nominal (ppm)', 'Included', 'Replicate', 'Intensity (cps)', 'Mean (cps)', 'SD (cps)', 'RSD (%)', 'Back-calculated (ppm)', 'Error (%)', 'Response status', 'Regression role', 'Regression weight']];
     standards.forEach(row => row.readings.forEach((reading, i) => {
       const back = fit && fit.slope > 0 ? (mean(row.readings) - fit.intercept) / fit.slope : null;
       const error = back !== null && row.concentration > 0 ? 100 * (back - row.concentration) / row.concentration : null;
-      rows.push([line.element, String(line.wavelength), mode, WEIGHTING_OPTIONS.find(option => option.value === weighting)!.label, String(integration), row.name, String(row.concentration), String(row.included), String(i + 1), String(reading), String(mean(row.readings)), row.readings.length > 1 ? String(sd(row.readings)) : '', row.concentration === 0 && !usesRsdWeighting ? '' : String(rsd(row.readings) ?? ''), String(back ?? ''), String(error ?? ''), SUPPORT_LABELS[describeRange(row.concentration, line)], row.included ? weightsById.get(row.id)?.role ?? 'unavailable' : 'excluded', String(weightsById.get(row.id)?.weight ?? '')]);
+      rows.push([line.element, String(line.wavelength), mode, WEIGHTING_OPTIONS.find(option => option.value === weighting)!.label, String(integration), row.name, String(row.concentration), String(row.included), String(i + 1), String(reading), String(mean(row.readings)), row.readings.length > 1 ? String(sd(row.readings)) : '', row.concentration === 0 && !usesRsdWeighting ? '' : String(rsd(row.readings) ?? ''), String(back ?? ''), String(error ?? ''), responseState(row.concentration, line).label, row.included ? weightsById.get(row.id)?.role ?? 'unavailable' : 'excluded', String(weightsById.get(row.id)?.weight ?? '')]);
     }));
     if (fit) {
       rows.push([], ['Fit summary', 'Value'], ['Slope (cps/ppm)', String(fit.slope)], ['Intercept (cps)', String(fit.intercept)], ['Unweighted R squared', String(fit.r2)], ['Residual standard error (cps)', String(fit.residualSE)], ['Relative fit error (%)', String(fit.relativeSE ?? '')], ['Estimated instrumental LOD (ppm)', String(limits?.lod ?? '')], ['Estimated instrumental LOQ (ppm)', String(limits?.loq ?? '')]);
@@ -204,7 +238,7 @@ export default function App() {
     if (weightInfo.anchor) rows.push(['Blank anchor intensity (cps)', String(weightInfo.anchor.intensity)]);
     if (fit) rows.push(['Regression observation count', String(fit.observationCount)], ['Fitted parameter count', String(fit.freeParameters)], ['Residual SE degrees of freedom', String(fit.observationCount - fit.freeParameters)], ['Relative concentration SE convention', 'Linear polynomial term count p = 2; zero concentrations omitted']);
     rows.push([], ['Weighting definition', WEIGHTING_NOTES[weighting] || 'All included standard means have weight 1.']);
-    rows.push([], ['Data source', 'Measured method calibration; generated replicates are simulated, not original instrument readings.'], ['Reference file', methodData.source.fileName], ['Reference SHA256', SOURCE_HASH], ['Reference exposure (s)', '5'], ['Plasma view', line.view!], ['Wavelength mode', line.acquisitionMode!], ['Standard mixture', profile.mixture], ['Nonzero measured range (ppm)', `${profile.measuredMin}–${profile.measuredMax}`], ['Reference model', 'Piecewise interpolation of recorded means and sample SDs; explicit extrapolation outside source range. No CID saturation flags were supplied.']);
+    rows.push([], ['Data source', 'Educational line model; all replicate readings and high-concentration saturation are simulated.'], ['Model version', TEACHING_MODEL_VERSION], ['Exposure (s)', '5'], ['Plasma view', line.view!], ['Wavelength mode', line.acquisitionMode!], ['Initial sensitivity (cps/ppm)', String(line.sensitivity)], ['Illustrative net signal plateau (cps)', String(teaching.plateau)], ['Response equation', 'I = baseline + plateau * (1 - exp(-sensitivity * C / plateau))'], ['Parameter provenance', teaching.provenance], ['Saturation scope', 'Line-dependent teaching assumption; not a validated detector threshold or a Qtegra saturation flag.']);
     exportCSV(rows, `rosen-${line.element}-${line.wavelength.toFixed(3)}-calibration.csv`);
   }
 
@@ -214,35 +248,42 @@ export default function App() {
       <div className="topbar-middle"><span className="topbar-divider"/>ICP-OES Simulator<span className="version-tag">LEXICON</span></div>
       <button className="help-button" onClick={() => setHelpOpen(true)}><CircleHelp size={17}/>Lab guide</button>
     </header>
-    <nav className="workflow" aria-label="Workflow"><span className="workflow-active"><span className="step-number">01</span> Calibration</span><span className="workflow-future"><span className="step-number">02</span> Verification <span className="soon">COMING NEXT</span></span><span className="workflow-future"><span className="step-number">03</span> Samples</span><span className="training-label"><FlaskConical size={14}/>Measured method · simulated replicates</span></nav>
-    <div className="page-title"><div><div className="eyebrow">THE VIRTUAL LABORATORY</div><h1>Calibration workspace<span className="title-dot">.</span></h1><p>Calibrate with a measured response. Explore sensitivity and compression.</p></div><div className={`instrument-status ${isBusy ? 'running' : ''}`}><span className="status-dot"/><span>{isBusy ? 'Acquiring signals' : 'Instrument ready'}<small>{isBusy ? progress : 'Measured method model · 5 s reference'}</small></span></div></div>
+    <nav className="workflow" aria-label="Workflow"><span className="workflow-active"><span className="step-number">01</span> Calibration</span><span className="workflow-future"><span className="step-number">02</span> Verification <span className="soon">COMING NEXT</span></span><span className="workflow-future"><span className="step-number">03</span> Samples</span><span className="training-label"><FlaskConical size={14}/>Educational response · simulated readings</span></nav>
+    <div className="page-title"><div><div className="eyebrow">THE VIRTUAL LABORATORY</div><h1>Calibration workspace<span className="title-dot">.</span></h1><p>Explore macro and trace levels, sensitivity, and saturation.</p></div><div className={`instrument-status ${isBusy ? 'running' : ''}`}><span className="status-dot"/><span>{isBusy ? 'Acquiring signals' : 'Instrument ready'}<small>{isBusy ? progress : 'Teaching model · 5 s exposure'}</small></span></div></div>
     <main className="workspace">
       <aside className="method-panel">
         <div className="panel-title"><Settings2 size={17}/><h2>Method setup</h2><span>01</span></div>
         <div className="method-body">
           <label className="field-label" htmlFor="element">Analyte</label>
-          <div className="select-wrap"><select id="element" disabled={isBusy} value={line.element} onChange={e => changeLine(LINES.find(l => l.element === e.target.value)!.id)}>{ELEMENTS.map(element => <option key={element} value={element}>{element} — {ELEMENT_NAMES[element]}</option>)}</select><ChevronDown size={15}/></div>
+          <div className="select-wrap"><select id="element" disabled={isBusy} value={line.element} onChange={e => changeLine(LINES.find(l => l.element === e.target.value)!.id)}>{[['Macro elements', ELEMENTS.filter(element => ['Mg', 'Na'].includes(element))], ['Trace elements', ELEMENTS.filter(element => ['As', 'Cd', 'Pb'].includes(element))]].map(([label, elements]) => <optgroup key={String(label)} label={String(label)}>{(elements as string[]).map(element => <option key={element} value={element}>{element} — {ELEMENT_NAMES[element]}</option>)}</optgroup>)}</select><ChevronDown size={15}/></div>
           <div className="field-heading"><span className="field-label">Analytical line</span><span>nm</span></div>
           <div className="line-options" role="group" aria-label="Analytical line">{LINES.filter(l => l.element === line.element).map(l => <button key={l.id} className={`line-option ${l.id === lineId ? 'selected' : ''}`} disabled={isBusy} aria-pressed={l.id === lineId} aria-label={`${l.element} ${l.wavelength.toFixed(3)} ${l.view} ${l.acquisitionMode}`} onClick={() => changeLine(l.id)}><span className="radio-indicator">{l.id === lineId && <span/>}</span><span className="line-info"><strong>{l.element} {l.wavelength.toFixed(3)}</strong><small>{l.view} · {l.acquisitionMode}</small><small>{l.label}</small></span><span className="sensitivity-bars" aria-hidden="true">{[0, 1, 2, 3].map((_, i) => <i key={i} style={{ height: 5 + i * 4, background: i < Math.max(1, Math.ceil(l.sensitivity / Math.max(...LINES.filter(v => v.element === line.element).map(v => v.sensitivity)) * 4)) ? 'currentColor' : 'transparent', border: '1px solid currentColor' }}/>)}</span></button>)}</div>
           <p className="line-description">{line.description}</p>
           <div className="method-separator"/>
           <div className="reference-method">
-            <strong>Measured method · Mixture {profile.mixture}</strong>
-            <p>Nonzero reference range: <b>{fmt(profile.measuredMin)}–{fmt(profile.measuredMax)} ppm</b></p>
-            <p>Response per ppm at the highest level: <b>{fmt(profile.compressionRatio * 100, 1)}%</b> of the first nonzero standard’s response per ppm.</p>
-            <p>{profile.compressionRatio < 0.9 ? 'Observed high-level response compression. This does not establish CID pixel saturation.' : 'No large endpoint compression in this export. This is not a validated linear-range limit.'}</p>
+            <strong>{['Mg', 'Na'].includes(line.element) ? 'Macro element' : 'Trace element'} · teaching model</strong>
+            <p>Initial sensitivity: <b>{fmt(line.sensitivity, 1)} cps/ppm</b></p>
+            <p>Illustrative signal ceiling: <b>{fmt(teaching.plateau, 1)} cps</b> above the blank.</p>
+            <p>Higher concentrations approach this ceiling smoothly. This is an educational assumption, not an instrument specification.</p>
           </div>
-          <div className="two-fields"><div><label className="field-label" htmlFor="replicates">Replicates</label><div className="select-wrap"><select id="replicates" value={replicates} disabled={isBusy} onChange={e => setReplicates(Number(e.target.value))}>{[3, 5, 10].map(n => <option key={n} value={n}>{n} readings</option>)}</select><ChevronDown size={13}/></div></div><div><label className="field-label" htmlFor="reference-exposure">Reference exposure</label><input id="reference-exposure" className="reference-exposure" readOnly value="5 s" /></div></div>
-          <p className="fine-print">Reference means and SDs are measured; new replicates are simulated. Exposure is fixed to your source method. Playback is accelerated.</p>
+          <div className="two-fields"><div><label className="field-label" htmlFor="replicates">Replicates</label><div className="select-wrap"><select id="replicates" value={replicates} disabled={isBusy} onChange={e => setReplicates(Number(e.target.value))}>{[3, 5, 10].map(n => <option key={n} value={n}>{n} readings</option>)}</select><ChevronDown size={13}/></div></div><div><label className="field-label" htmlFor="reference-exposure">Exposure</label><input id="reference-exposure" className="reference-exposure" readOnly value="5 s" /></div></div>
+          <p className="fine-print">All readings are simulated at 5 s exposure. Line sensitivities are informed by your measurements; high-level saturation is modeled. Playback is accelerated.</p>
 
         </div>
-        <div className="method-footer"><Beaker size={18}/><p><strong>Your measured method</strong>Thermo iCAP PRO Duo · 25 channels. Interpolation follows the export; detector saturation is not inferred from cps alone.</p></div>
+        <div className="method-footer"><Beaker size={18}/><p><strong>Five elements · ten lines</strong>Compare higher and lower sensitivity. Line-dependent saturation illustrates the effect of extending a calibration range.</p></div>
       </aside>
 
       <div className="main-column">
-        <section className="acquisition-toolbar"><div className="toolbar-label"><span className="small-kicker">METHOD</span><strong>{line.element} {line.wavelength.toFixed(3)} · {line.view} · {line.acquisitionMode}</strong><span className="subtle-tag">5 s · Mixture {profile.mixture}</span></div><div className="toolbar-actions"><button className="button secondary" disabled={isBusy} onClick={loadDemo}><Waves size={15}/>Load demo</button>{isBusy ? <button className="button stop" onClick={stopAcquisition}><Square size={14}/>Stop acquisition</button> : <button className="button primary" onClick={() => void acquire(standards.filter(row => row.included).map(row => row.id))} disabled={!standards.some(row => row.included)}><Play size={15} fill="currentColor"/>Run calibration</button>}</div></section>
+        <section className="acquisition-toolbar"><div className="toolbar-label"><span className="small-kicker">METHOD</span><strong>{line.element} {line.wavelength.toFixed(3)} · {line.view} · {line.acquisitionMode}</strong><span className="subtle-tag">5 s · Teaching model</span></div><div className="toolbar-actions"><button className="button secondary" disabled={isBusy} onClick={loadDemo}><Waves size={15}/>Load demo</button>{isBusy ? <button className="button stop" onClick={stopAcquisition}><Square size={14}/>Stop acquisition</button> : <button className="button primary" onClick={() => void acquire(standards.filter(row => row.included).map(row => row.id))} disabled={!standards.some(row => row.included)}><Play size={15} fill="currentColor"/>Run calibration</button>}</div></section>
 
-        {extrapolated > 0 && <div className="source-warning" role="note"><Info size={16}/><span>{extrapolated} standard(s) exceed this channel’s measured maximum of {fmt(profile.measuredMax)} ppm. These are extrapolations, not verified responses or saturation limits.</span></div>}
+        <section className="standard-builder card" aria-label="Calibration level setup">
+          <div className="card-heading"><div><span className="section-kicker">STANDARD PREPARATION</span><h2>Calibration levels</h2></div><span className="subtle-tag">0.01–100 ppm + blank</span></div>
+          <div className="level-controls">
+            <div><label className="field-label" htmlFor="standard-preset">Standard set</label><div className="level-control-row"><div className="select-wrap"><select id="standard-preset" disabled={isBusy} value={standardSet} onChange={e => setStandardSet(e.target.value as keyof typeof STANDARD_SETS)}>{Object.entries(STANDARD_SETS).map(([key, set]) => <option key={key} value={key}>{set.label}</option>)}</select><ChevronDown size={13}/></div><button className="button secondary" disabled={isBusy} onClick={applyStandardSet}>Apply standard set</button></div></div>
+            <div><label className="field-label" htmlFor="add-levels">Add concentrations (ppm)</label><div className="level-control-row"><input id="add-levels" type="text" value={levelsDraft} disabled={isBusy} onChange={e => setLevelsDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !isBusy) addLevels(); }} placeholder="e.g. 0.1, 0.5, 1, 10, 25, 50, 100"/><button className="button secondary" disabled={isBusy} onClick={addLevels}><Plus size={14}/>Add levels</button></div></div>
+          </div>
+          <p className="level-help">Applying a set replaces levels and clears readings. Adding levels keeps existing readings. Edit or delete individual standards in the table; the blank stays at 0 ppm.</p>
+        </section>
         <CalibrationCharts standards={standards} fit={fit} line={line} mode={mode} selectedId={selectedId} onSelect={setSelectedId} weighting={weighting}/>
 
         <section className="results-section card">
@@ -256,14 +297,14 @@ export default function App() {
             const showRsd = n > 1 && (!isBlank || usesRsdWeighting);
             return <tr key={row.id} className={`${selectedId === row.id ? 'selected-row' : ''} ${!row.included ? 'excluded-row' : ''}`} onClick={() => setSelectedId(row.id)}>
               <td><input type="checkbox" aria-label={`Include ${row.name}`} checked={row.included} disabled={isBusy} onChange={() => setStandards(rows => rows.map(s => s.id === row.id ? { ...s, included: !s.included } : s))}/></td>
-              <td><button className="solution-button" aria-label={row.name} onClick={() => setSelectedId(row.id)}>{busyId === row.id ? <LoaderCircle className="spin" size={14}/> : n ? <span className="measured-dot"/> : <span className="pending-dot"/>}{row.name}</button><span className={`support-label ${describeRange(row.concentration, line)}`}>{SUPPORT_LABELS[describeRange(row.concentration, line)]}</span></td>
+              <td><button className="solution-button" aria-label={row.name} onClick={() => setSelectedId(row.id)}>{busyId === row.id ? <LoaderCircle className="spin" size={14}/> : n ? <span className="measured-dot"/> : <span className="pending-dot"/>}{row.name}</button><span className={`support-label response-${responseState(row.concentration, line).kind}`}>{responseState(row.concentration, line).label}</span></td>
               <td>{isBlank ? <span className="blank-concentration">0 <span className="blank-tag">BLK</span></span> : <input className="concentration-input" aria-label={`${row.name} concentration`} type="number" min="0.01" max="100" step="any" disabled={isBusy} value={concentrationDraft[row.id] ?? row.concentration} onChange={e => setConcentrationDraft(d => ({ ...d, [row.id]: e.target.value }))} onBlur={() => updateConcentration(row.id)} onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}/>}</td>
               <td className="number">{n ? fmt(mean(row.readings), 1) : <span className="empty-value">—</span>}</td>
               <td className="number">{showRsd ? <span title={isBlank ? 'Calculated blank RSD is used by 1/RSD² weighting, but is unstable near a zero mean.' : 'Sample SD divided by the absolute mean intensity, multiplied by 100.'}>{fmt(rsd(row.readings), 2)}{isBlank ? '†' : ''}</span> : <span className="empty-value" title={isBlank ? 'RSD is not informative near zero. Inspect blank SD instead.' : 'At least two readings are required.'}>{isBlank && n ? 'n/a' : '—'}</span>}</td>
               <td className="number regression-weight" title={weight?.role === 'anchor' ? `No numeric weight. This blank fixes the intercept at ${fmt(weightInfo.anchor?.intensity, 4)} cps.` : weight ? `Sample SD: ${fmt(weight.sd, 4)} cps; RSD: ${fmt(weight.rsd, 4)}%. ${WEIGHTING_NOTES[weighting]}` : row.included ? 'Measure this standard to calculate its weight.' : 'Excluded from the regression.'}>{weight?.role === 'anchor' ? <span className="blank-tag">ANCHOR</span> : fmt(weight?.weight, 5)}</td>
               <td className="number">{fmt(back, 4)}</td>
               <td className="number">{error !== null ? <span className={`error-badge ${Math.abs(error) > 10 ? 'warning' : 'good'}`}>{error > 0 ? '+' : ''}{fmt(error, 1)}%</span> : <span className="empty-value">—</span>}</td>
-              <td><div className="row-actions"><button className="icon-button" aria-label={`Measure ${row.name}`} title={`Measure ${row.name}`} disabled={isBusy} onClick={() => void acquire([row.id])}><Play size={13}/></button>{!isBlank && <button className="icon-button delete-button" aria-label={`Remove ${row.name}`} title={`Remove ${row.name}`} disabled={isBusy || standards.length <= 3} onClick={e => { e.stopPropagation(); setStandards(rows => rows.filter(s => s.id !== row.id)); if (selectedId === row.id) setSelectedId(blank.id); }}><Trash2 size={13}/></button>}</div></td>
+              <td><div className="row-actions"><button className="icon-button" aria-label={`Measure ${row.name}`} title={`Measure ${row.name}`} disabled={isBusy} onClick={() => void acquire([row.id])}><Play size={13}/></button>{!isBlank && <button className="icon-button delete-button" aria-label={`Remove ${row.name}`} title={`Remove ${row.name}`} disabled={isBusy} onClick={e => { e.stopPropagation(); removeStandard(row.id); }}><Trash2 size={13}/></button>}</div></td>
             </tr>;
           })}</tbody></table></div>
           <div className="table-footer"><span><Info size={13}/>{legacyConcentrationWeighting ? 'The checked blank anchors the intercept; only nonzero standards receive weights.' : 'Uncheck a standard to exclude it from the fit. Measurements are retained.'}</span><button className="text-button" disabled={isBusy || measured === 0} onClick={() => clearReadings('Measurements cleared. Standard concentrations and exclusions have been retained.')}><ListRestart size={14}/>Clear readings</button></div>
@@ -273,7 +314,7 @@ export default function App() {
           <div className="card fit-card"><div className="card-heading"><div><span className="section-kicker">REGRESSION</span><h2>Fit & detection limits</h2></div><span className={`fit-status ${fit ? needsReview ? 'review' : 'available' : ''}`}>{fit ? needsReview ? 'Review errors' : 'Fit available' : weightInfo.error ? 'Weighting needs data' : 'Awaiting data'}</span></div>
             <div className="fit-options"><label htmlFor="weighting">Weighting</label><div className="segmented" role="group" aria-label="Regression weighting">{WEIGHTING_OPTIONS.map(({ value, label }) => <button key={value} className={weighting === value ? 'active' : ''} aria-pressed={weighting === value} onClick={() => setWeighting(value)}>{label}</button>)}</div><span className="intercept-label" title={legacyConcentrationWeighting ? 'Automatically fixed to the measured blank mean, following the legacy Qtegra concentration-weighting workflow.' : 'Slope and intercept are fitted freely.'}>{legacyConcentrationWeighting ? 'Forcing: Blank (legacy)' : 'Free intercept'}</span></div>
             {weightInfo.error && <div className="weighting-error" role="alert"><Info size={16}/><span>{weightInfo.error}</span></div>}
-            <div className="formula-explainer" aria-label="Calibration equation and variable definitions"><strong>I = b + m × C</strong><dl><div><dt>I</dt><dd>Mean intensity (cps)</dd></div><div><dt>C</dt><dd>Standard concentration (ppm)</dd></div><div><dt>m</dt><dd>Slope / sensitivity (cps per ppm)</dd></div><div><dt>b</dt><dd>Intercept (cps); fixed to the blank mean in legacy concentration weighting</dd></div></dl><p>Calculated concentration: <b>C = (I − b) / m</b>. The fitted line approximates the channel response; weighting cannot remove physical response compression.</p></div>
+            <div className="formula-explainer" aria-label="Calibration equation and variable definitions"><strong>I = b + m × C</strong><dl><div><dt>I</dt><dd>Mean intensity (cps)</dd></div><div><dt>C</dt><dd>Standard concentration (ppm)</dd></div><div><dt>m</dt><dd>Slope / sensitivity (cps per ppm)</dd></div><div><dt>b</dt><dd>Intercept (cps); fixed to the blank mean in legacy concentration weighting</dd></div></dl><p>Calculated concentration: <b>C = (I − b) / m</b>. The fitted line approximates the channel response; weighting cannot remove modeled response compression.</p></div>
             <div className="equation"><span>Fitted I = </span>{fit ? <><strong>{fmt(fit.slope, 2)}</strong><span> × concentration </span><strong>{fit.intercept >= 0 ? '+' : '−'} {fmt(Math.abs(fit.intercept), 2)}</strong></> : <span className="empty-value">measure at least 3 included levels</span>}</div>
             <div className="fit-metrics"><div><span>R² <small>unweighted</small></span><strong>{fit ? fmt(fit.r2, 6) : '—'}</strong></div><div><span>Residual SE <small>cps</small></span><strong>{fmt(fit?.residualSE, 2)}</strong></div><div><span>Est. LOD <small>ppm</small></span><strong>{fmt(limits?.lod, 5)}</strong></div><div><span>Est. LOQ <small>ppm</small></span><strong>{fmt(limits?.loq, 5)}</strong></div></div>
             <div className="fit-footnote">{fit && <span className="relative-fit-error">Relative concentration SE: <strong>{fmt(fit.relativeSE, 2)}%</strong> <span title="Square root of the sum of squared relative concentration errors divided by k − 2, where k is the number of included nonzero standards.">ⓘ</span></span>}{fit ? `${legacyConcentrationWeighting ? `${fit.observationCount} weighted levels + blank anchor` : `${included} included levels`} · ${weightingLabel} fit. ` : legacyConcentrationWeighting ? 'Fit requires an included measured blank and at least two distinct measured nonzero levels. ' : 'Fit requires at least three distinct measured, included levels. '}{WEIGHTING_NOTES[weighting]}{limits ? `Instrumental estimates: 3s / slope and 10s / slope; n = ${limits.count} blank readings. Not a validated method LOQ.` : 'LOD / LOQ require at least 10 included blank readings and a positive calibration slope.'}</div>
@@ -290,6 +331,6 @@ export default function App() {
       </div>
     </main>
     <footer className="page-footer"><span><span className="status-dot"/>{storageAvailable ? 'Session saved on this browser' : 'Browser storage unavailable · export results to save them'}</span><span>1 ppm = 1 mg/L in this aqueous simulation</span><div><button className="text-button" disabled={isBusy} onClick={resetSession}><RotateCcw size={13}/>Reset session</button><button className="text-button" disabled={isBusy || !measured} onClick={download}><ArrowDownToLine size={14}/>Export CSV</button></div></footer>
-    {helpOpen && <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget) setHelpOpen(false); }}><section className="guide-modal" role="dialog" aria-modal="true" aria-labelledby="guide-title"><button className="modal-close icon-button" aria-label="Close lab guide" autoFocus onClick={() => setHelpOpen(false)}><X size={20}/></button><span className="eyebrow">YOUR FIRST EXPERIMENT</span><h2 id="guide-title">One element. Different stories.</h2><p>This teaching model uses the uploaded 28–29 Oct calibration from a Thermo iCAP PRO Duo, at 5 s exposure. Every channel retains its Axial/Radial view and iFR/eUV mode. Recorded means and sample SDs define a reference curve; new replicate readings are simulated, not the original instrument replicates.</p><ol><li><strong>Start with a measured channel.</strong> Choose an element and line; its source standard levels load automatically. Run the calibration. Inspect replicate variation and back-calculated concentrations.</li><li><strong>Compare weightings.</strong> Switch between None, 1/x, 1/x², 1/SD² and 1/RSD². The same measurements are refitted. For 1/x and 1/x², the legacy Qtegra workflow automatically sets Forcing = Blank: the intercept equals the measured blank mean, and only nonzero standards receive weights. Keep the blank included and measured; its Weight cell reads ANCHOR. There is no substituted concentration and no numeric blank weight. For 1/SD², w = 1/s², with s the sample SD of replicate intensities. For 1/RSD², w = 1/(s/|mean|)² = (100/RSD%)²; the relative SD is fractional in the weighting formula while the table displays percent. Precision weights require at least two readings and a positive SD for every included measured standard; 1/RSD² also requires a nonzero mean. Blank RSD is unstable near zero. The Weight column shows the actual coefficients. These squared coefficients follow Qtegra Absolute SD and Relative SD. Red bars on measured points show mean ± one replicate SD, not standard error or a confidence interval.</li><li><strong>Explore natural response compression.</strong> Compare Mg 280.270 Axial with Mg 279.079 Radial over 25–100 ppm. Their recorded responses have different curvature without selecting a saturation outcome. Numeric compression is not proof of detector pixel saturation.</li><li><strong>Find a usable range.</strong> Exclude high standards or try a less sensitive line. Changing the channel loads its measured concentration levels and clears incompatible readings. Added levels are labelled interpolated or extrapolated. No response above the measured maximum is experimentally verified.</li><li><strong>Estimate detection limits.</strong> Acquire 10 blank readings. LOD = 3s / slope and LOQ = 10s / slope, where s is the sample SD of included blank readings. A biased fit also biases these estimates.</li></ol><div className="guide-note"><Info size={17}/><span>The ±10% error guides are illustrative teaching thresholds. Residual SE is √[Σ(signal residual²) / (n − fitted parameter count)] in cps. Relative concentration SE retains the older documented linear-polynomial term convention p = 2, excluding zero concentrations. Residual SE uses the number of freely fitted parameters: one with a fixed blank intercept and two for a free intercept. R², blank precision, and visual peak quality alone cannot validate a method. Verification standards and sample matrices will follow in a later version.</span></div><button className="button primary" onClick={() => setHelpOpen(false)}>Back to the laboratory<ArrowRight size={15}/></button></section></div>}
+    {helpOpen && <div className="modal-backdrop" onClick={e => { if (e.target === e.currentTarget) setHelpOpen(false); }}><section className="guide-modal" role="dialog" aria-modal="true" aria-labelledby="guide-title"><button className="modal-close icon-button" aria-label="Close lab guide" autoFocus onClick={() => setHelpOpen(false)}><X size={20}/></button><span className="eyebrow">YOUR FIRST EXPERIMENT</span><h2 id="guide-title">One element. Different stories.</h2><p>Choose Mg or Na for macro-level examples, or As, Cd and Pb for trace examples. Each element has two lines with different initial sensitivities. All readings are simulated. The line-dependent saturation model is illustrative and does not predict a real detector threshold.</p><ol><li><strong>Prepare your standards.</strong> Start with 0.1, 0.5 and 1 ppm, plus a blank. Apply a prepared set, enter a comma-separated concentration list, or add, edit and delete individual levels. Positive concentrations range from 0.01 to 100 ppm. Run the calibration and inspect replicate variation and back-calculated concentrations.</li><li><strong>Compare weightings.</strong> Switch between None, 1/x, 1/x², 1/SD² and 1/RSD². The same measurements are refitted. For 1/x and 1/x², the legacy Qtegra workflow automatically sets Forcing = Blank: the intercept equals the measured blank mean, and only nonzero standards receive weights. Keep the blank included and measured; its Weight cell reads ANCHOR. There is no substituted concentration and no numeric blank weight. For 1/SD², w = 1/s², with s the sample SD of replicate intensities. For 1/RSD², w = 1/(s/|mean|)² = (100/RSD%)²; the relative SD is fractional in the weighting formula while the table displays percent. Precision weights require at least two readings and a positive SD for every included measured standard; 1/RSD² also requires a nonzero mean. Blank RSD is unstable near zero. The Weight column shows the actual coefficients. These squared coefficients follow Qtegra Absolute SD and Relative SD. Red bars on measured points show mean ± one replicate SD, not standard error or a confidence interval.</li><li><strong>Extend the concentration range.</strong> Add 10, 25, 50 and 100 ppm. Higher-sensitivity lines approach their modeled signal ceiling and lose linearity automatically. Compare with the lower-sensitivity line. These teaching ceilings are assumptions, not detector specifications or Qtegra saturation flags.</li><li><strong>Find a usable range.</strong> Exclude high standards or try the other line. Channel changes retain your concentrations and clear incompatible readings. The response-status labels describe the expected teaching curve. Weighting changes the fitted line, while the same acquired readings remain unchanged.</li><li><strong>Estimate detection limits.</strong> Acquire 10 blank readings. LOD = 3s / slope and LOQ = 10s / slope, where s is the sample SD of included blank readings. A biased fit also biases these estimates.</li></ol><div className="guide-note"><Info size={17}/><span>The ±10% error guides are illustrative teaching thresholds. Residual SE is √[Σ(signal residual²) / (n − fitted parameter count)] in cps. Relative concentration SE retains the older documented linear-polynomial term convention p = 2, excluding zero concentrations. Residual SE uses the number of freely fitted parameters: one with a fixed blank intercept and two for a free intercept. R², blank precision, and visual peak quality alone cannot validate a method. Verification standards and sample matrices will follow in a later version.</span></div><button className="button primary" onClick={() => setHelpOpen(false)}>Back to the laboratory<ArrowRight size={15}/></button></section></div>}
   </div>;
 }

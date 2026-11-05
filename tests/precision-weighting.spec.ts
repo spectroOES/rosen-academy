@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
-const KEY = 'rosen-calibration-v2-measured';
+const KEY = 'rosen-calibration-v3-teaching';
 type Session = { weighting: string; standards: { name: string; concentration: number; readings: number[] }[] };
 const session = (page: Page) => page.evaluate(key => JSON.parse(localStorage.getItem(key)!), KEY) as Promise<Session>;
 const readings = async (page: Page) => (await session(page)).standards.map(row => row.readings);
@@ -27,7 +27,7 @@ test('precision weighting refits retained data, exports squared coefficients, an
     await page.getByRole('button', { name: 'Export CSV', exact: true }).click();
     const csv = await readFile((await (await downloading).path())!, 'utf8');
     expect(csv).toContain('"Regression weight"');
-    const exported = csv.split('\r\n').filter(line => line.startsWith('"Cu",')).map(fields);
+    const exported = csv.split('\r\n').filter(line => line.startsWith('"Mg",')).map(fields);
     expect(exported).toHaveLength(19);
     for (const row of (await session(page)).standards) {
       const avg = row.readings.reduce((sum, value) => sum + value, 0) / row.readings.length;

@@ -19,7 +19,7 @@ async function laboratory(page: Page) {
 }
 
 async function browserSession(frame: FrameLocator): Promise<BrowserSession> {
-  return frame.locator('body').evaluate(() => JSON.parse(localStorage.getItem('rosen-calibration-v2-measured')!));
+  return frame.locator('body').evaluate(() => JSON.parse(localStorage.getItem('rosen-calibration-v3-teaching')!));
 }
 
 test('Streamlit serves the English laboratory, refits existing demo readings, and downloads CSV', async ({ page }) => {
@@ -41,10 +41,10 @@ test('Streamlit serves the English laboratory, refits existing demo readings, an
   const downloading = page.waitForEvent('download');
   await frame.getByRole('button', { name: 'Export CSV', exact: true }).click();
   const download = await downloading;
-  expect(download.suggestedFilename()).toBe('rosen-Cu-324.754-calibration.csv');
+  expect(download.suggestedFilename()).toBe('rosen-Mg-279.553-calibration.csv');
   const csv = await readFile((await download.path())!, 'utf8');
-  expect(csv).toContain('"Cu","324.754","measured","1/x²","5"');
-  expect(csv.split('\r\n').filter(line => line.startsWith('"Cu",'))).toHaveLength(19);
+  expect(csv).toContain('"Mg","279.553","teaching","1/x²","5"');
+  expect(csv.split('\r\n').filter(line => line.startsWith('"Mg",'))).toHaveLength(19);
   for (const value of originalReadings.flat()) expect(csv).toContain(`"${value}"`);
   expect(errors).toEqual([]);
 });

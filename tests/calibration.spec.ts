@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
-const STORAGE_KEY = 'rosen-calibration-v2-measured';
+const STORAGE_KEY = 'rosen-calibration-v3-teaching';
 type StoredStandard = { id: string; concentration: number; included: boolean; readings: number[] };
 
 async function session(page: Page) {
@@ -57,24 +57,21 @@ test('starts empty, fits demo data, and refits without reacquiring signals', asy
   await expect(page.getByText(/2 weighted levels \+ blank anchor/)).toBeVisible();
 });
 
-test('changing the measured channel resets readings and loads native mixture concentrations', async ({ page }) => {
+test('changing the channel clears readings but preserves the user’s concentration plan', async ({ page }) => {
   await loadDemo(page);
-  await page.getByRole('group', { name: 'Analytical line', exact: true }).getByRole('button', { name: 'Cu 327.396 Axial iFR', exact: true }).click();
+  const concentrations = (await session(page)).standards.map(row => row.concentration);
+  await page.getByRole('group', { name: 'Analytical line', exact: true }).getByRole('button', { name: 'Mg 279.079 Radial iFR', exact: true }).click();
   await expect(page.getByText('0/4 measured', { exact: true })).toBeVisible();
-  expect((await readings(page)).every((values) => values.length === 0)).toBe(true);
+  expect((await readings(page)).every(values => values.length === 0)).toBe(true);
+  expect((await session(page)).standards.map(row => row.concentration)).toEqual(concentrations);
   await expect(page.getByRole('status')).toContainText('Channel changed');
 
   await loadDemo(page);
-  await page.getByLabel('Analyte', { exact: true }).selectOption('Sb');
-  await expect(page.getByText('0/3 measured', { exact: true })).toBeVisible();
-  expect((await session(page)).standards.map(row => row.concentration)).toEqual([0, 0.05, 0.1]);
-  expect((await readings(page)).every((values) => values.length === 0)).toBe(true);
-  await expect(page.getByRole('group', { name: 'Analytical line', exact: true }).getByRole('button', { name: 'Sb 206.833 Axial eUV', exact: true })).toHaveAttribute('aria-pressed', 'true');
-
-  await page.getByLabel('Analyte', { exact: true }).selectOption('Mg');
+  await page.getByLabel('Analyte', { exact: true }).selectOption('As');
   await expect(page.getByText('0/4 measured', { exact: true })).toBeVisible();
-  expect((await session(page)).standards.map(row => row.concentration)).toEqual([0, 25, 50, 100]);
-  const exposure = page.getByLabel('Reference exposure', { exact: true });
+  expect((await session(page)).standards.map(row => row.concentration)).toEqual(concentrations);
+  expect((await readings(page)).every(values => values.length === 0)).toBe(true);
+  const exposure = page.getByLabel('Exposure', { exact: true });
   await expect(exposure).toHaveValue('5 s');
   await expect(exposure).toHaveAttribute('readonly', '');
   expect((await session(page)).integration).toBe(5);
@@ -117,13 +114,13 @@ test('validates concentrations and invalidates only the edited standard', async 
     await concentration.fill(invalid);
     await concentration.press('Tab');
     await expect(page.getByRole('status')).toContainText('Enter a concentration from 0.01 to 100 ppm');
-    await expect(concentration).toHaveValue('0.01');
+    await expect(concentration).toHaveValue('0.1');
     expect(await readings(page)).toEqual(previous);
   }
-  await concentration.fill('0.1');
+  await concentration.fill('0.5');
   await concentration.press('Tab');
   await expect(page.getByRole('status')).toContainText('Each standard must have a unique concentration');
-  await expect(concentration).toHaveValue('0.01');
+  await expect(concentration).toHaveValue('0.1');
   expect(await readings(page)).toEqual(previous);
 
   await concentration.fill('0.02');
@@ -143,14 +140,14 @@ test('exports raw replicates with method metadata and restores its session after
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export CSV', exact: true }).click();
   const download = await downloadPromise;
-  expect(download.suggestedFilename()).toBe('rosen-Cu-324.754-calibration.csv');
+  expect(download.suggestedFilename()).toBe('rosen-Mg-279.553-calibration.csv');
   const csv = await readFile((await download.path())!, 'utf8');
   expect(csv).toContain('"Replicate","Intensity (cps)"');
-  expect(csv).toContain('"Cu","324.754","measured","1/x²","5"');
+  expect(csv).toContain('"Mg","279.553","teaching","1/x²","5"');
   expect(csv).toContain('"Fit summary","Value"');
-  expect(csv).toContain('generated replicates are simulated, not original instrument readings');
-  expect(csv).toContain('Reference SHA256');
-  expect(csv.split('\r\n').filter((line) => line.startsWith('"Cu",'))).toHaveLength(19);
+  expect(csv).toContain('Educational line model');
+  expect(csv).not.toMatch(/mixture/i);
+  expect(csv.split('\r\n').filter((line) => line.startsWith('"Mg",'))).toHaveLength(19);
   for (const value of beforeReload.standards.flatMap((standard) => standard.readings)) {
     expect(csv).toContain(`"${value}"`);
   }
@@ -194,25 +191,4 @@ test('keeps the lab usable on a narrow screen and the guide keyboard accessible'
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Lab guide', exact: true })).toBeFocused();
-});
-
-test('measured magnesium channels naturally exhibit different high-level response compression', async ({ page }) => {
-  await page.getByLabel('Analyte', { exact: true }).selectOption('Mg');
-  const lines = page.getByRole('group', { name: 'Analytical line', exact: true });
-  const relativeResponse = async () => {
-    const rows = (await session(page)).standards;
-    const avg = (concentration: number) => {
-      const values = rows.find(row => row.concentration === concentration)!.readings;
-      return values.reduce((sum, value) => sum + value, 0) / values.length;
-    };
-    return (avg(100) - avg(0)) / (4 * (avg(25) - avg(0)));
-  };
-  await lines.getByRole('button', { name: 'Mg 280.270 Axial iFR', exact: true }).click();
-  await loadDemo(page);
-  const compressed = await relativeResponse();
-  await lines.getByRole('button', { name: 'Mg 279.079 Radial iFR', exact: true }).click();
-  await loadDemo(page);
-  const nearLinear = await relativeResponse();
-  expect(compressed).toBeLessThan(0.55);
-  expect(nearLinear).toBeGreaterThan(0.95);
 });
