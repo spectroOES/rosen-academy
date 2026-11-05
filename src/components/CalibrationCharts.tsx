@@ -2,6 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { expectedSignal, mean, sd } from '../lib/model';
 import type { FitResult, ResponseMode, SpectralLine, Standard, Weighting } from '../lib/model';
+import calibrationData from '../data/calibration-profiles.json';
 
 type Props = {
   standards: Standard[];
@@ -85,6 +86,9 @@ export function CalibrationCharts({ standards, fit, line, mode, weighting, selec
   const positive = standards.map((standard) => standard.concentration).filter((value) => value > 0);
   const xMax = Math.max(...positive, 0.01);
   const xMin = logX ? Math.min(...positive, xMax / 10) : 0;
+  const profile = line.profile;
+  const referenceExposure = calibrationData.source.referenceExposureSeconds;
+  const visibleReferencePoints = profile?.points.filter((point) => point.concentration >= xMin && point.concentration <= xMax) ?? [];
   const xRange = logX ? Math.log10(xMax) - Math.log10(xMin) : xMax;
   const xScale = (value: number) => LEFT + (logX ? (Math.log10(value) - Math.log10(xMin)) / xRange : value / xRange) * PLOT_W;
   const errorXScale = (value: number) => errorLeft + (logX ? (Math.log10(value) - Math.log10(xMin)) / xRange : value / xRange) * errorPlotW;
@@ -92,14 +96,20 @@ export function CalibrationCharts({ standards, fit, line, mode, weighting, selec
     ? Array.from({ length: Math.ceil(Math.log10(xMax)) - Math.floor(Math.log10(xMin)) + 1 }, (_, i) => 10 ** (Math.floor(Math.log10(xMin)) + i)).filter((value) => value >= xMin && value <= xMax)
     : niceTicks(0, xMax, PLOT_W < 410 ? 3 : 5);
   const errorXTicks = logX ? xTicks : niceTicks(0, xMax, errorPlotW < 360 ? 3 : 5);
-  const sampleXs = Array.from({ length: 181 }, (_, i) => logX ? 10 ** (Math.log10(xMin) + (i / 180) * xRange) : (i / 180) * xMax);
+  const sampleXs = [...new Set([
+    ...Array.from({ length: 181 }, (_, i) => logX ? 10 ** (Math.log10(xMin) + (i / 180) * xRange) : (i / 180) * xMax),
+    ...visibleReferencePoints.map((point) => point.concentration),
+  ])].sort((a, b) => a - b);
   const ys = visible.flatMap((standard) => {
     const average = mean(standard.readings);
     const deviation = replicateSD.get(standard.id) ?? 0;
     return [average - deviation, average + deviation];
   });
   if (fit) ys.push(...sampleXs.map((value) => fit.intercept + fit.slope * value));
-  if (showModel) ys.push(...sampleXs.map((value) => expectedSignal(value, line, mode)));
+  if (showModel) {
+    ys.push(...sampleXs.map((value) => expectedSignal(value, line, mode)));
+    ys.push(...visibleReferencePoints.map((point) => point.mean));
+  }
   const minSignal = Math.min(0, ...ys);
   const maxSignal = Math.max(1, ...ys);
   const padding = (maxSignal - minSignal) * 0.1;
@@ -158,6 +168,7 @@ export function CalibrationCharts({ standards, fit, line, mode, weighting, selec
         .calibration-charts .legend-dot { width: 8px; height: 8px; background: ${BLACK}; border-radius: 50%; display: inline-block; }
         .calibration-charts .legend-anchor { width: 11px; height: 11px; background: ${BLACK}; border: 2px solid ${BLACK}; box-shadow: inset 0 0 0 2px ${GRAY}; display: inline-block; }
         .calibration-charts .legend-line { width: 20px; height: 0; border-top: 2px solid ${BLACK}; display: inline-block; }
+        .calibration-charts .legend-reference { width: 9px; height: 9px; background: ${GRAY}; border: 1.5px solid ${BLACK}; transform: rotate(45deg); display: inline-block; margin: 0 2px; }
         .calibration-charts .chart-card .chart-footnote { margin: 0; padding: 12px 24px 16px; color: ${BLACK}; font-size: 14px; font-weight: 600; line-height: 1.6; background: ${GRAY}; }
         .calibration-charts .chart-point { cursor: pointer; outline: none; }
         .calibration-charts .chart-point:focus-visible circle:last-child { stroke: ${BLACK}; stroke-width: 4px; }
@@ -178,10 +189,10 @@ export function CalibrationCharts({ standards, fit, line, mode, weighting, selec
         <div className="card-heading">
           <div>
             <h2>Calibration curve</h2>
-            <p className="chart-subtitle">{line.element} {line.wavelength.toFixed(3)} nm <span aria-hidden="true">·</span> Net intensity vs. concentration</p>
+            <p className="chart-subtitle">{line.element} {line.wavelength.toFixed(3)} nm{profile && <> · {line.view ?? profile.view} · {line.acquisitionMode ?? profile.mode} · {referenceExposure} s reference</>} <span aria-hidden="true">·</span> Intensity vs. concentration</p>
           </div>
           <div className="chart-controls">
-            <label className="model-toggle"><input type="checkbox" checked={showModel} onChange={(event) => setShowModel(event.target.checked)} />Show model</label>
+            <label className="model-toggle" title={profile ? 'Show the empirical response interpolated from exported means, source reference points, and extrapolation beyond the observed range.' : 'Show the expected synthetic response before replicate noise is added.'}><input type="checkbox" checked={showModel} onChange={(event) => setShowModel(event.target.checked)} />Show model</label>
             <div className="axis-toggle" aria-label="Concentration axis scale">
               <button type="button" aria-pressed={!logX} onClick={() => setLogX(false)}>Linear</button>
               <button type="button" aria-pressed={logX} onClick={() => setLogX(true)}>Log x</button>
@@ -189,7 +200,7 @@ export function CalibrationCharts({ standards, fit, line, mode, weighting, selec
           </div>
         </div>
         <div className="chart-canvas" ref={mainChart.ref}>
-        <svg className="chart-svg" style={{ height: H, flex: '0 0 auto' }} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Calibration graph showing ${visible.length} measured standards with a ${logX ? 'logarithmic' : 'linear'} concentration axis`}>
+        <svg className="chart-svg" style={{ height: H, flex: '0 0 auto' }} viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Calibration graph showing ${visible.length} ${profile ? 'simulated' : 'measured'} standards with a ${logX ? 'logarithmic' : 'linear'} concentration axis`}>
           <defs><clipPath id={`${id}-clip`}><rect x={LEFT - 10} y={TOP - 10} width={PLOT_W + 20} height={BOTTOM - TOP + 20} /></clipPath></defs>
           {niceTicks(yMin, yMax).map((tick) => <g key={`y-${tick}`}>
             <line x1={LEFT} x2={W - RIGHT} y1={yScale(tick)} y2={yScale(tick)} stroke={BLACK} strokeOpacity="0.2" strokeDasharray="3 4" />
@@ -202,10 +213,17 @@ export function CalibrationCharts({ standards, fit, line, mode, weighting, selec
           <line x1={LEFT} x2={W - RIGHT} y1={BOTTOM} y2={BOTTOM} stroke={BLACK} />
           <line x1={LEFT} x2={LEFT} y1={TOP} y2={BOTTOM} stroke={BLACK} />
           <text x={(LEFT + W - RIGHT) / 2} y={H - 14} textAnchor="middle" fill={BLACK} fontSize="14">Concentration (ppm){logX && W > 450 ? ' · logarithmic axis' : ''}</text>
-          <text transform={`translate(20 ${(TOP + BOTTOM) / 2}) rotate(-90)`} textAnchor="middle" fill={BLACK} fontSize="14">Net intensity (cps)</text>
+          <text transform={`translate(20 ${(TOP + BOTTOM) / 2}) rotate(-90)`} textAnchor="middle" fill={BLACK} fontSize="14">Intensity (cps)</text>
           <g clipPath={`url(#${id}-clip)`}>
             {showModel && <path d={path((value) => expectedSignal(value, line, mode))} fill="none" stroke={BLACK} strokeWidth="1.8" strokeDasharray="5 5" />}
             {fit && <path d={path((value) => fit.intercept + fit.slope * value)} fill="none" stroke={BLACK} strokeWidth="2.5" />}
+            {showModel && visibleReferencePoints.map((point) => {
+              const x = xScale(point.concentration);
+              const y = yScale(point.mean);
+              return <polygon key={`reference-${point.concentration}`} className="reference-point" data-concentration={point.concentration} points={`${x},${y - 7} ${x + 7},${y} ${x},${y + 7} ${x - 7},${y}`} fill={GRAY} stroke={BLACK} strokeWidth="1.5">
+                <title>Imported CSV reference mean: {point.concentration} ppm, {point.mean} cps; exported SD {point.sd} cps; {referenceExposure} s exposure. Original replicate readings are not available.</title>
+              </polygon>;
+            })}
             {visible.filter((standard) => replicateSD.has(standard.id)).map((standard) => {
               const average = mean(standard.readings);
               const deviation = replicateSD.get(standard.id)!;
@@ -246,14 +264,16 @@ export function CalibrationCharts({ standards, fit, line, mode, weighting, selec
         </svg>
         </div>
         <div className="chart-legend">
-          <span><i className="legend-dot" />Measured standard</span>
+          <span><i className="legend-dot" />{profile ? 'Simulated standard' : 'Measured standard'}</span>
           <span><i className="legend-line" />Linear fit</span>
           <span><svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true"><path d="M9 2V16 M4 2H14 M4 16H14" fill="none" stroke={RED} strokeWidth="2" /></svg>±1 SD (replicates)</span>
           {anchorId !== null && <span title="The measured blank fixes the intercept and is excluded from regression weights."><i className="legend-anchor" />Blank anchor</span>}
           {measured.some((standard) => !standard.included) && <span><i className="legend-dot" style={{ background: GRAY, border: `2px solid ${BLACK}` }} />Excluded from fit</span>}
-          {showModel && <span><i className="legend-line" style={{ borderColor: BLACK, borderTopStyle: 'dashed' }} />Synthetic response model</span>}
+          {showModel && <span><i className="legend-line" style={{ borderColor: BLACK, borderTopStyle: 'dashed' }} />{profile ? 'Measured-method reference' : 'Synthetic response model'}</span>}
+          {showModel && profile && <span><i className="legend-reference" />Imported CSV mean</span>}
         </div>
-        <p className="chart-footnote">Red bars show mean ± 1 sample SD of replicate net intensities, not SEM or a confidence interval. At least two readings are required; very small bars may be subpixel at this scale.</p>
+        <p className="chart-footnote">Red bars show mean ± 1 sample SD of {profile ? 'simulated replicate intensities' : 'replicate intensities'}, not SEM or a confidence interval. At least two readings are required; very small bars may be subpixel at this scale.</p>
+        {profile && <p className="chart-footnote">Nonzero CSV reference range: {compact(profile.measuredMin)}–{compact(profile.measuredMax)} ppm, plus blank; exposure {referenceExposure} s. The model interpolates exported mean intensities between measured levels and extrapolates beyond {compact(profile.measuredMax)} ppm. Interpolated values are model estimates; this range does not establish validated linearity.{showModel && ' Hollow diamonds show imported CSV means; red bars describe the simulated replicates, not the uncertainty of those source means.'}</p>}
         {logX && <p className="chart-footnote">The zero-concentration blank is hidden on the log axis. {anchorId !== null ? 'It still fixes the intercept and is excluded from regression weights.' : concentrationWeighting ? 'An enabled, measured blank is required to fix the intercept.' : 'Its regression role is unchanged.'}</p>}
       </section>
 

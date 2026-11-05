@@ -1,0 +1,1145 @@
+{
+  "source": {
+    "fileName": "261028-29  CALIBRATION CPS for Simulator.csv",
+    "sha256": "7c934432532f1e43db6ca5544a0d62a90890e921fa2d5e42ff768b6e345f4ff9",
+    "instrument": "Thermo iCAP PRO Duo ICP-OES",
+    "referenceExposureSeconds": 5,
+    "ambiguousLabelPolicy": "user confirmed 'Mixture 0.1 ppm' is Mixture I",
+    "notes": [
+      "Concentrations are assigned from explicit mixture labels and the user's element-to-mixture mapping.",
+      "Mixture I: blank, 0.01, 0.1 and 1 ppm; Mixture II: blank, 0.05 and 0.1 ppm; Mixture III: blank, 25, 50 and 100 ppm.",
+      "The user confirmed that the sample labelled 'Mixture 0.1 ppm' belongs to Mixture I; it is used only for Mixture I elements.",
+      "Mixture II standards are labelled HCl 1%; the only exported blank is labelled HNO3 1%. Its baseline is retained with an acid-mismatch limitation.",
+      "Means and SDs are exported measurements in cps. reportedRsd is the exported percentage; referenceRsd is a fractional SD/absolute mean at the highest known concentration.",
+      "The user confirmed 5 s exposure for every mode. Raw replicates, replicate counts, and detector/subarray saturation flags are not present in this export.",
+      "The user confirmed that the high-concentration Mg results were numeric and had no saturation flag in Qtegra. These measured values remain valid numeric inputs, not N/A or confirmed detector saturation.",
+      "Endpoint response compression is empirical evidence of nonlinearity, not proof of pixel saturation or a universal cps limit.",
+      "Channels for 10 starter elements are retained with their exact exported wavelengths, viewing geometries, and iFR/eUV modes.",
+      "Only the exported concentration knots are measured; interpolation and extrapolation in the simulator are modelling assumptions."
+    ]
+  },
+  "profiles": [
+    {
+      "id": "p-177495-axial-ifr",
+      "element": "P",
+      "wavelength": 177.495,
+      "view": "Axial",
+      "mode": "iFR",
+      "mixture": "III",
+      "points": [
+        {
+          "concentration": 0.0,
+          "mean": 0.022296106,
+          "sd": 0.328413844,
+          "reportedRsd": 1472.965049,
+          "label": "blank icp HNO3 1%"
+        },
+        {
+          "concentration": 25.0,
+          "mean": 4910.347238,
+          "sd": 16.45366493,
+          "reportedRsd": 0.335081495,
+          "label": "Mixture III 25 ppm"
+        },
+        {
+          "concentration": 50.0,
+          "mean": 9491.879178,
+          "sd": 33.21096072,
+          "reportedRsd": 0.349888153,
+          "label": "MIxture III 50 ppm"
+        },
+        {
+          "concentration": 100.0,
+          "mean": 17419.9786,
+          "sd": 83.30356391,
+          "reportedRsd": 0.478207039,
+          "label": "MIxture III 100 ppm"
+        }
+      ],
+      "baseline": 0.022296106,
+      "referenceSlope": 196.41299767576,
+      "referenceRsd": 0.004782070393014145,
+      "referenceBlankSd": 0.328413844,
+      "measuredMax": 100.0,
+      "measuredMin": 25.0,
+      "compressionRatio": 0.8869044569367547,
+      "description": "P 177.495 (Aqueous-Axial-iFR); mixture III, measured positive range 25–100 ppm. Measured high-level response is compressed relative to the lowest measured positive standard; the export does not establish detector saturation."
+    },
+    {
+      "id": "zn-206200-axial-ifr",
+      "element": "Zn",
+      "wavelength": 206.2,
+      "view": "Axial",
+      "mode": "iFR",
+      "mixture": "I",
+      "points": [
+        {
+          "concentration": 0.0,
+          "mean": 3.441163607,
+          "sd": 0.459985571,
+          "reportedRsd": 13.36715202,
+          "label": "blank icp HNO3 1%"
+        },
+        {
+          "concentration": 0.01,
+          "mean": 44.0577465,
+          "sd": 0.652636573,
+          "reportedRsd": 1.481320822,
+          "label": "Mixture I 0.01 ppm"
+        },
+        {
+          "concentration": 0.1,
+          "mean": 363.5359169,
+          "sd": 0.869573034,
+          "reportedRsd": 0.239198658,
+          "label": "Mixture 0.1 ppm"
+        },
+        {
+          "concentration": 1.0,
+          "mean": 4005.062932,
+          "sd": 14.23072742,
+          "reportedRsd": 0.355318447,
+          "label": "Mixture I 1 ppm"
+        }
+      ],
+      "baseline": 3.441163607,
+      "referenceSlope": 4061.6582893,
+      "referenceRsd": 0.0035531844721585016,
+      "referenceBlankSd": 0.459985571,
+      "measuredMax": 1.0,
+      "measuredMin": 0.01,
+      "compressionRatio": 0.9852187169301859,
+      "description": "Zn 206.200 (Aqueous-Axial-iFR); mixture I, measured positive range 0.01–1 ppm. No greater than 10% endpoint response compression is observed across the measured positive standards."
+    },
+    {
+      "id": "sb-206833-axial-euv",
+      "element": "Sb",
+      "wavelength": 206.833,
+      "view": "Axial",
+      "mode": "eUV",
+      "mixture": "II",
+      "points": [
+        {
+          "concentration": 0.0,
+          "mean": 0.490454328,
+          "sd": 0.241004985,
+          "reportedRsd": 49.13912911,
+          "label": "blank icp HNO3 1%"
+        },
+        {
+          "concentration": 0.05,
+          "mean": 20.18502237,
+          "sd": 0.438865801,
+          "reportedRsd": 2.174215086,
+          "label": "Mixture II 0.05 ppm HCL 1%"
+        },
+        {
+          "concentration": 0.1,
+          "mean": 40.25313735,
+          "sd": 0.444975058,
+          "reportedRsd": 1.105441928,
+          "label": "Mixture II 0.1 ppm HCL 1%"
+        }
+      ],
+      "baseline": 0.490454328,
+      "referenceSlope": 393.89136084,
+      "referenceRsd": 0.011054419289879276,
+      "referenceBlankSd": 0.241004985,
+      "measuredMax": 0.1,
+      "measuredMin": 0.05,
+      "compressionRatio": 1.0094835016742534,
+      "description": "Sb 206.833 (Aqueous-Axial-eUV); mixture II, measured positive range 0.05–0.1 ppm. No greater than 10% endpoint response compression is observed across the measured positive standards."
+    },
+    {
+      "id": "zn-213856-axial-ifr",
+      "element": "Zn",
+      "wavelength": 213.856,
+      "view": "Axial",
+      "mode": "iFR",
+      "mixture": "I",
+      "points": [
+        {
+          "concentration": 0.0,
+          "mean": 3.969591733,
+          "sd": 0.476894918,
+          "reportedRsd": 12.01370192,
+          "label": "blank icp HNO3 1%"
+        },
+        {
+          "concentration": 0.01,
+          "mean": 45.14920928,
+          "sd": 0.456719785,
+          "reportedRsd": 1.011578701,
+          "label": "Mixture I 0.01 ppm"
+        },
+        {
+          "concentration": 0.1,
+          "mean": 365.1995399,
+          "sd": 0.829947928,
+          "reportedRsd": 0.227258755,
+          "label": "Mixture 0.1 ppm"
+        },
+        {
+          "concentration": 1.0,
+          "mean": 4020.155562,
+          "sd": 7.461265138,
+          "reportedRsd": 0.185596428,
+          "label": "Mixture I 1 ppm"
+        }
+      ],
+      "baseline": 3.969591733,
+      "referenceSlope": 4117.9617547,
+      "referenceRsd": 0.001855964283702512,
+      "referenceBlankSd": 0.476894918,
+      "measuredMax": 1.0,
+      "measuredMin": 0.01,
+      "compressionRatio": 0.9752849126593177,
+      "description": "Zn 213.856 (Aqueous-Axial-iFR); mixture I, measured positive range 0.01–1 ppm. No greater than 10% endpoint response compression is observed across the measured positive standards."
+    },
+    {
+      "id": "cd-214438-axial-ifr",
+      "element": "Cd",
+      "wavelength": 214.438,
+      "view": "Axial",
+      "mode": "iFR",
+      "mixture": "I",
+      "points": [
+        {
+          "concentration": 0.0,
+          "mean": -0.415414831,
+          "sd": 0.44533751,
+          "reportedRsd": 107.203084,
+          "label": "blank icp HNO3 1%"
+        },
+        {
+          "concentration": 0.01,
+          "mean": 135.5347381,
+          "sd": 1.41806443,
+          "reportedRsd": 1.046273782,
+          "label": "Mixture I 0.01 ppm"
+        },
+        {
+          "concentration": 0.1,
+          "mean": 1248.090624,
+          "sd": 2.821945957,
+          "reportedRsd": 0.226101046,
+          "label": "Mixture 0.1 ppm"
+        },
+        {
+          "concentration": 1.0,
+          "mean": 13613.56395,
+          "sd": 73.60830154,
+          "reportedRsd": 0.540698246,
+          "label": "Mixture I 1 ppm"
+        }
+      ],
+      "baseline": -0.415414831,
+      "referenceSlope": 13595.0152931,
+      "referenceRsd": 0.005406982463251293,
+      "referenceBlankSd": 0.44533751,
+      "measuredMax": 1.0,
+      "measuredMin": 0.01,
+      "compressionRatio": 1.0013949283117487,
+      "description": "Cd 214.438 (Aqueous-Axial-iFR); mixture I, measured positive range 0.01–1 ppm. No greater than 10% endpoint response compression is observed across the measured positive standards."
+    },
+    {
+      "id": "p-214914-axial-ifr",
+      "element": "P",
+      "wavelength": 214.914,
+      "view": "Axial",
+      "mode": "iFR",
+      "mixture": "III",
+      "points": [
+        {
+          "concentration": 0.0,
+          "mean": -1.305954048,
+          "sd": 1.06401768,
+          "reportedRsd": 81.47435827,
+          "label": "blank icp HNO3 1%"
+        },
+        {
+          "concentration": 25.0,
+          "mean": 5380.636777,
+          "sd": 6.370640535,
+          "reportedRsd": 0.118399379,
+          "label": "Mixture III 25 ppm"
+        },
+        {
+          "concentration": 50.0,
+          "mean": 10710.13868,
+          "sd": 116.2555503,
+          "reportedRsd": 1.085471942,
+          "label": "MIxture III 50 ppm"
+        },
+        {
+          "concentration": 100.0,
+          "mean": 20783.13806,
+          "sd": 288.7339248,
+          "reportedRsd": 1.389270109,
+          "label": "MIxture III 100 ppm"
+        }
+      ],
+      "baseline": -1.305954048,
+      "referenceSlope": 215.27770924191998,
+      "referenceRsd": 0.013892701090972783,
+      "referenceBlankSd": 1.06401768,
+      "measuredMax": 100.0,
+      "measuredMin": 25.0,
+      "compressionRatio": 0.9654712551168649,
+      "description": "P 214.914 (Aqueous-Axial-iFR); mixture III, measured positive range 25–100 ppm. No greater than 10% endpoint response compression is observed across the measured positive standards."
+    },
+    {
+      "id": "p-214914-radial-ifr",
+      "element": "P",
+      "wavelength": 214.914,
+      "view": "Radial",
+      "mode": "iFR",
+      "mixture": "III",
+      "points": [
+        {
+          "concentration": 0.0,
+          "mean": -0.139886392,
+          "sd": 0.115600124,
+          "reportedRsd": 82.6385769,
+          "label": "blank icp HNO3 1%"
+        },
+        {
+          "concentration": 25.0,
+          "mean": 959.6886447,
+          "sd": 4.547997301,
+          "reportedRsd": 0.473903419,
+          "label": "Mixture III 25 ppm"
+        },
+        {
+          "concentration": 50.0,
+          "mean": 1921.080622,
+          "sd": 4.451923008,
+          "reportedRsd": 0.231740561,
+          "label": "MIxture III 50 ppm"
+        },
+        {
+          "concentration": 100.0,
+          "mean": 3783.500821,
+          "sd": 14.10724967,
+          "reportedRsd": 0.372862339,
+          "label": "MIxture III 100 ppm"
+        }
+      ],
+      "baseline": -0.139886392,
+      "referenceSlope": 38.39314124368,
+      "referenceRsd": 0.003728623393365982,
+      "referenceBlankSd": 0.115600124,
+      "measuredMax": 100.0,
+      "measuredMin": 25.0,
+      "compressionRatio": 0.9854991242777864,
+      "description": "P 214.914 (Aqueous-Radial-iFR); mixture III, measured positive range 25–100 ppm. No greater than 10% endpoint response compression is observed across the measured positive standards."
+    },
+    {
+      "id": "pb-216999-axial-euv",
+      "element": "Pb",
+      "wavelength": 216.999,
+      "view": "Axial",
+      "mode": "eUV",
+      "mixture": "I",
+      "points": [
+        {
+          "concentration": 0.0,
+          "mean": 0.020030416,
+          "sd": 0.414793624,
+          "reportedRsd": 2070.818771,
+          "label": "blank icp HNO3 1%"
+        },
+        {
+          "concentration": 0.01,
+          "mean": 1.250229238,
+          "sd": 0.236716114,
+          "reportedRsd": 18.93381682,
+          "label": "Mixture I 0.01 ppm"
+        },
+        {
+          "concentration": 0.1,
+          "mean": 11.85554288,
+          "sd": 0.347360976,
+          "reportedRsd": 2.92994576,
+          "label": "Mixture 0.1 ppm"
+        },
+        {
+          "concentration": 1.0,
+          "mean": 125.8139561,
+          "sd": 0.764934311,
+          "reportedRsd": 0.607988442,
+          "label": "Mixture I 1 ppm"
+        }
+      ],
+      "baseline": 0.020030416,
+      "referenceSlope": 123.0198822,
+      "referenceRsd": 0.006079884415938814,
+      "referenceBlankSd": 0.414793624,
+      "measuredMax": 1.0,
+      "measuredMin": 0.01,
+      "compressionRatio": 1.0225495540589942,
+      "description": "Pb 216.999 (Aqueous-Axial-eUV); mixture I, measured positive range 0.01–1 ppm. No greater than 10% endpoint response compression is observed across the measured positive standards."
+    },
+    {
+      "id": "sb-217581-axial-euv",
+      "element": "Sb",
+      "wavelength": 217.581,
+      "view": "Axial",
+      "mode": "eUV",
+      "mixture": "II",
+      "points": [
+        {
+          "concentration": 0.0,
+          "mean": 0.532603017,
+          "sd": 0.66305008,
+          "reportedRsd": 124.4923629,
+          "label": "blank icp HNO3 1%"
+        },
+        {
+          "concentration": 0.05,
+          "mean": 21.73309538,
+          "sd": 0.407452266,
+          "reportedRsd": 1.87480089,
+          "label": "Mixture II 0.05 ppm HCL 1%"
+        },
+        {
+          "concentration": 0.1,
+          "mean": 42.71452894,
+          "sd": 1.133467709,
+          "reportedRsd": 2.653588223,
+          "label": "Mixture II 0.1 ppm HCL 1%"
+        }
+      ],
+      "baseline": 0.532603017,
+      "referenceSlope": 424.00984726,
+      "referenceRsd": 0.02653588221918947,
+      "referenceBlankSd": 0.66305008,
+      "measuredMax": 0.1,
+      "measuredMin": 0.05,
+      "compressionRatio": 0.9948336387842032,
+      "description": "Sb 217.581 (Aqueous-Axial-eUV); mixture II, measured positive range 0.05–0.1 ppm. No greater than 10% endpoint response compression is observed across the measured positive standards."
+    },
+    {
+      "id": "pb-220353-axial-euv",
+      "element": "Pb",
+      "wavelength": 220.353,
+      "view": "Axial",
+      "mode": "eUV",
+      "mixture": "I",
+      "points": [
+        {
+          "concentration": 0.0,
+          "mean": 0.369273011,
+          "sd": 0.287762165,
+          "reportedRsd": 77.92667115,
+          "label": "blank icp HNO3 1%"
+        },
+        {
+          "concentration": 0.01,
+          "mean": 9.162451486,
+          "sd": 0.367109655,
+          "reportedRsd": 4.006675022,
+          "label": "Mixture I 0.01 ppm"
+        },
+        {
+          "concentration": 0.1,
+          "mean": 81.68268838,
+          "sd": 0.304389928,
+          "reportedRsd": 0.372649253,
+          "label": "Mixture 0.1 ppm"
+        },
+        {
+          "concentration": 1.0,
+          "mean": 879.540629,
+          "sd": 1.809083931,
+          "reportedRsd": 0.20568509,
+          "label": "Mixture I 1 ppm"
+        }
+      ],
+      "baseline": 0.369273011,
+      "referenceSlope": 879.3178475,
+      "referenceRsd": 0.002056850896196633,
+      "referenceBlankSd": 0.287762165,
+      "measuredMax": 1.0,
+      "measuredMin": 0.01,
+      "compressionRatio": 0.9998334032324984,
+      "description": "Pb 220.353 (Aqueous-Axial-eUV); mixture I, measured positive range 0.01–1 ppm. No greater than 10% endpoint response compression is observed across the measured positive standards."
+    },
+    {
+      "id": "cd-226502-axial-ifr",
+      "element": "Cd",
+      "wavelength": 226.502,
+      "view": "Axial",
+      "mode": "iFR",
+      "mixture": "I",
+      "points": [
+        {
+          "concentration": 0.0,
+          "mean": 0.101870506,
+          "sd": 1.642824786,
+          "reportedRsd": 1612.65988,
+          "label": "blank icp HNO3 1%"
+        },
+        {
+          "concentration": 0.01,
+          "mean": 124.857981,
+          "sd": 1.034573845,
+          "reportedRsd": 0.828600493,
+          "label": "Mixture I 0.01 ppm"
+        },
+        {
+          "concentration": 0.1,
+          "mean": 1143.075286,
+          "sd": 2.35083498,
+          "reportedRsd": 0.205658806,
+          "label": "Mixture 0.1 ppm"
+        },
+        {
+          "concentration": 1.0,
+          "mean": 12476.04007,
+          "sd": 47.40922018,
+          "reportedRsd": 0.380002147,
+          "label": "Mixture I 1 ppm"
+        }
+      ],
+      "baseline": 0.101870506,
+      "referenceSlope": 12475.6110494,
+      "referenceRsd": 0.0038000214742817833,
+      "referenceBlankSd": 1.642824786,
+      "measuredMax": 1.0,
+      "measuredMin": 0.01,
+      "compressionRatio": 1.0000262231719717,
+      "description": "Cd 226.502 (Aqueous-Axial-iFR); mixture I, measured positive range 0.01–1 ppm. No greater than 10% endpoint response compression is observed across the measured positive standards."
+    },
+    {
+      "id": "fe-238204-radial-ifr",
+      "element": "Fe",
+      "wavelength": 238.204,
+      "view": "Radial",
+      "mode": "iFR",
+      "mixture": "I",
+      "points": [
+        {
+          "concentration": 0.0,
+          "mean": 0.437162049,
+          "sd": 0.449498217,
+          "reportedRsd": 102.8218754,
+          "label": "blank icp HNO3 1%"
+        },
+        {
+          "concentration": 0.01,
+          "mean": 7.905330649,
+          "sd": 0.133471178,
+          "reportedRsd": 1.688369328,
+          "label": "Mixture I 0.01 ppm"
+        },
+        {
+          "concentration": 0.1,
+          "mean": 69.95620935,
+          "sd": 0.345708697,
+          "reportedRsd": 0.494178716,
+          "label": "Mixture 0.1 ppm"
+        },
+        {
+          "concentration": 1.0,
+          "mean": 767.2507394,
+          "sd": 1.49056581,
+          "reportedRsd": 0.194273623,
+          "label": "Mixture I 1 ppm"
+        }
+      ],
+      "baseline": 0.437162049,
+      "referenceSlope": 746.8168599999999,
+      "referenceRsd": 0.001942736231398932,
+      "referenceBlankSd": 0.449498217,
+      "measuredMax": 1.0,
+      "measuredMin": 0.01,
+      "compressionRatio": 1.026775931854297,
+      "description": "Fe 238.204 (Aqueous-Radial-iFR); mixture I, measured positive range 0.01–1 ppm. No greater than 10% endpoint response compression is observed across the measured positive standards."
+    },
+    {
+      "id": "fe-259940-axial-ifr",
+      "element": "Fe",
+      "wavelength": 259.94,
+      "view": "Axial",
+      "mode": "iFR",
+      "mixture": "I",
+      "points": [
+        {
+          "concentration": 0.0,
+          "mean": 3.376920375,
+          "sd": 0.873844837,
+          "reportedRsd": 25.87697488,
+          "label": "blank icp HNO3 1%"
+        },
+        {
+          "concentration": 0.01,
+          "mean": 67.44718642,
+          "sd": 0.733131624,
+          "reportedRsd": 1.086971396,
+          "label": "Mixture I 0.01 ppm"
+        },
+        {
+          "concentration": 0.1,
+          "mean": 601.0474437,
+          "sd": 2.532447053,
+          "reportedRsd": 0.421338961,
+          "label": "Mixture 0.1 ppm"
+        },
+        {
+          "concentration": 1.0,
+          "mean": 6513.948539,
+          "sd": 21.16363099,
+          "reportedRsd": 0.324897117,
+          "label": "Mixture I 1 ppm"
+        }
+      ],
+      "baseline": 3.376920375,
+      "referenceSlope": 6407.0266045,
+      "referenceRsd": 0.0032489711675322774,
+      "referenceBlankSd": 0.873844837,
+      "measuredMax": 1.0,
+      "measuredMin": 0.01,
+      "compressionRatio": 1.0161611650016054,
+      "description": "Fe 259.940 (Aqueous-Axial-iFR); mixture I, measured positive range 0.01–1 ppm. No greater than 10% endpoint response compression is observed across the measured positive standards."
+    },
+    {
+      "id": "mg-279079-radial-ifr",
+      "element": "Mg",
+      "wavelength": 279.079,
+      "view": "Radial",
+      "mode": "iFR",
+      "mixture": "III",
+      "points": [
+        {
+          "concentration": 0.0,
+          "mean": 0.189355277,
+          "sd": 0.497108382,
+          "reportedRsd": 262.5268173,
+          "label": "blank icp HNO3 1%"
+        },
+        {
+          "concentration": 25.0,
+          "mean": 3561.166422,
+          "sd": 7.579706361,
+          "reportedRsd": 0.212843363,
+          "label": "Mixture III 25 ppm"
+        },
+        {
+          "concentration": 50.0,
+          "mean": 7104.641053,
+          "sd": 15.31182873,
+          "reportedRsd": 0.215518682,
+          "label": "MIxture III 50 ppm"
+        },
+        {
+          "concentration": 100.0,
+          "mean": 13966.86559,
+          "sd": 58.88689966,
+          "reportedRsd": 0.421618575,
+          "label": "MIxture III 100 ppm"
+        }
+      ],
+      "baseline": 0.189355277,
+      "referenceSlope": 142.43908266892,
+      "referenceRsd": 0.004216185749089034,
+      "referenceBlankSd": 0.497108382,
+      "measuredMax": 100.0,
+      "measuredMin": 25.0,
+      "compressionRatio": 0.9805368002254417,
+      "description": "Mg 279.079 (Aqueous-Radial-iFR); mixture III, measured positive range 25–100 ppm. No greater than 10% endpoint response compression is observed across the measured positive standards."
+    },
+    {
+      "id": "mg-279553-radial-ifr",
+      "element": "Mg",
+      "wavelength": 279.553,
+      "view": "Radial",
+      "mode": "iFR",
+      "mixture": "III",
+      "points": [
+        {
+          "concentration": 0.0,
+          "mean": 47.90223754,
+          "sd": 1.265996031,
+          "reportedRsd": 2.642874521,
+          "label": "blank icp HNO3 1%"
+        },
+        {
+          "concentration": 25.0,
+          "mean": 933999.8873,
+          "sd": 5438.644032,
+          "reportedRsd": 0.582296005,
+          "label": "Mixture III 25 ppm"
+        },
+        {
+          "concentration": 50.0,
+          "mean": 1590020.861,
+          "sd": 10239.99892,
+          "reportedRsd": 0.64401664,
+          "label": "MIxture III 50 ppm"
+        },
+        {
+          "concentration": 100.0,
+          "mean": 2420115.13,
+          "sd": 8826.373828,
+          "reportedRsd": 0.36470884,
+          "label": "MIxture III 100 ppm"
+        }
+      ],
+      "baseline": 47.90223754,
+      "referenceSlope": 37358.0794024984,
+      "referenceRsd": 0.0036470884044264456,
+      "referenceBlankSd": 1.265996031,
+      "measuredMax": 100.0,
+      "measuredMin": 25.0,
+      "compressionRatio": 0.6478029027371822,
+      "description": "Mg 279.553 (Aqueous-Radial-iFR); mixture III, measured positive range 25–100 ppm. Measured high-level response is compressed relative to the lowest measured positive standard; the export does not establish detector saturation."
+    },
+    {
+      "id": "mg-280270-axial-ifr",
+      "element": "Mg",
+      "wavelength": 280.27,
+      "view": "Axial",
+      "mode": "iFR",
+      "mixture": "III",
+      "points": [
+        {
+          "concentration": 0.0,
+          "mean": 118.2191579,
+          "sd": 1.460217167,
+          "reportedRsd": 1.235178116,
+          "label": "blank icp HNO3 1%"
+        },
+        {
+          "concentration": 25.0,
+          "mean": 1994673.785,
+          "sd": 8443.908517,
+          "reportedRsd": 0.42332278,
+          "label": "Mixture III 25 ppm"
+        },
+        {
+          "concentration": 50.0,
+          "mean": 2979675.644,
+          "sd": 9824.874907,
+          "reportedRsd": 0.329729678,
+          "label": "MIxture III 50 ppm"
+        },
+        {
+          "concentration": 100.0,
+          "mean": 3778293.184,
+          "sd": 25483.63187,
+          "reportedRsd": 0.674474707,
+          "label": "MIxture III 100 ppm"
+        }
+      ],
+      "baseline": 118.2191579,
+      "referenceSlope": 79782.222633684,
+      "referenceRsd": 0.006744747066722073,
+      "referenceBlankSd": 1.460217167,
+      "measuredMax": 100.0,
+      "measuredMin": 25.0,
+      "compressionRatio": 0.4735610064649862,
+      "description": "Mg 280.270 (Aqueous-Axial-iFR); mixture III, measured positive range 25–100 ppm. Measured high-level response is compressed relative to the lowest measured positive standard; the export does not establish detector saturation."
+    },
+    {
+      "id": "mg-280270-radial-ifr",
+      "element": "Mg",
+      "wavelength": 280.27,
+      "view": "Radial",
+      "mode": "iFR",
+      "mixture": "III",
+      "points": [
+        {
+          "concentration": 0.0,
+          "mean": 16.98092444,
+          "sd": 0.592027474,
+          "reportedRsd": 3.486426642,
+          "label": "blank icp HNO3 1%"
+        },
+        {
+          "concentration": 25.0,
+          "mean": 372118.6993,
+          "sd": 1439.901348,
+          "reportedRsd": 0.386946786,
+          "label": "Mixture III 25 ppm"
+        },
+        {
+          "concentration": 50.0,
+          "mean": 687764.9713,
+          "sd": 5957.754623,
+          "reportedRsd": 0.866248627,
+          "label": "MIxture III 50 ppm"
+        },
+        {
+          "concentration": 100.0,
+          "mean": 1172291.224,
+          "sd": 768.9691897,
+          "reportedRsd": 0.065595406,
+          "label": "MIxture III 100 ppm"
+        }
+      ],
+      "baseline": 16.98092444,
+      "referenceSlope": 14884.068735022398,
+      "referenceRsd": 0.0006559540615481056,
+      "referenceBlankSd": 0.592027474,
+      "measuredMax": 100.0,
+      "measuredMin": 25.0,
+      "compressionRatio": 0.7876033522454677,
+      "description": "Mg 280.270 (Aqueous-Radial-iFR); mixture III, measured positive range 25–100 ppm. Measured high-level response is compressed relative to the lowest measured positive standard; the export does not establish detector saturation."
+    },
+    {
+      "id": "mg-285213-axial-ifr",
+      "element": "Mg",
+      "wavelength": 285.213,
+      "view": "Axial",
+      "mode": "iFR",
+      "mixture": "III",
+      "points": [
+        {
+          "concentration": 0.0,
+          "mean": 14.6053942,
+          "sd": 0.989255652,
+          "reportedRsd": 6.773221173,
+          "label": "blank icp HNO3 1%"
+        },
+        {
+          "concentration": 25.0,
+          "mean": 309365.3131,
+          "sd": 294.3153682,
+          "reportedRsd": 0.095135219,
+          "label": "Mixture III 25 ppm"
+        },
+        {
+          "concentration": 50.0,
+          "mean": 540051.4989,
+          "sd": 826.0889047,
+          "reportedRsd": 0.152964839,
+          "label": "MIxture III 50 ppm"
+        },
+        {
+          "concentration": 100.0,
+          "mean": 866784.5596,
+          "sd": 5757.956959,
+          "reportedRsd": 0.664289286,
+          "label": "MIxture III 100 ppm"
+        }
+      ],
+      "baseline": 14.6053942,
+      "referenceSlope": 12374.028308232,
+      "referenceRsd": 0.006642892856394624,
+      "referenceBlankSd": 0.989255652,
+      "measuredMax": 100.0,
+      "measuredMin": 25.0,
+      "compressionRatio": 0.700475166707974,
+      "description": "Mg 285.213 (Aqueous-Axial-iFR); mixture III, measured positive range 25–100 ppm. Measured high-level response is compressed relative to the lowest measured positive standard; the export does not establish detector saturation."
+    },
+    {
+      "id": "mg-285213-radial-ifr",
+      "element": "Mg",
+      "wavelength": 285.213,
+      "view": "Radial",
+      "mode": "iFR",
+      "mixture": "III",
+      "points": [
+        {
+          "concentration": 0.0,
+          "mean": 1.286497611,
+          "sd": 0.199896918,
+          "reportedRsd": 15.53807149,
+          "label": "blank icp HNO3 1%"
+        },
+        {
+          "concentration": 25.0,
+          "mean": 31001.5097,
+          "sd": 131.9028299,
+          "reportedRsd": 0.425472279,
+          "label": "Mixture III 25 ppm"
+        },
+        {
+          "concentration": 50.0,
+          "mean": 60870.09514,
+          "sd": 391.0539609,
+          "reportedRsd": 0.6424402,
+          "label": "MIxture III 50 ppm"
+        },
+        {
+          "concentration": 100.0,
+          "mean": 115030.8358,
+          "sd": 137.0024307,
+          "reportedRsd": 0.119100613,
+          "label": "MIxture III 100 ppm"
+        }
+      ],
+      "baseline": 1.286497611,
+      "referenceSlope": 1240.00892809556,
+      "referenceRsd": 0.0011910061310708132,
+      "referenceBlankSd": 0.199896918,
+      "measuredMax": 100.0,
+      "measuredMin": 25.0,
+      "compressionRatio": 0.9276509765059077,
+      "description": "Mg 285.213 (Aqueous-Radial-iFR); mixture III, measured positive range 25–100 ppm. No greater than 10% endpoint response compression is observed across the measured positive standards."
+    },
+    {
+      "id": "ca-317933-radial-ifr",
+      "element": "Ca",
+      "wavelength": 317.933,
+      "view": "Radial",
+      "mode": "iFR",
+      "mixture": "III",
+      "points": [
+        {
+          "concentration": 0.0,
+          "mean": 7.123699626,
+          "sd": 1.013657766,
+          "reportedRsd": 14.22937265,
+          "label": "blank icp HNO3 1%"
+        },
+        {
+          "concentration": 25.0,
+          "mean": 17447.51563,
+          "sd": 54.18171812,
+          "reportedRsd": 0.310541164,
+          "label": "Mixture III 25 ppm"
+        },
+        {
+          "concentration": 50.0,
+          "mean": 34485.05697,
+          "sd": 152.6430256,
+          "reportedRsd": 0.442635272,
+          "label": "MIxture III 50 ppm"
+        },
+        {
+          "concentration": 100.0,
+          "mean": 66138.23653,
+          "sd": 36.05186032,
+          "reportedRsd": 0.05450986,
+          "label": "MIxture III 100 ppm"
+        }
+      ],
+      "baseline": 7.123699626,
+      "referenceSlope": 697.61567721496,
+      "referenceRsd": 0.0005450986027371179,
+      "referenceBlankSd": 1.013657766,
+      "measuredMax": 100.0,
+      "measuredMin": 25.0,
+      "compressionRatio": 0.947959098258577,
+      "description": "Ca 317.933 (Aqueous-Radial-iFR); mixture III, measured positive range 25–100 ppm. No greater than 10% endpoint response compression is observed across the measured positive standards."
+    },
+    {
+      "id": "cu-324754-axial-ifr",
+      "element": "Cu",
+      "wavelength": 324.754,
+      "view": "Axial",
+      "mode": "iFR",
+      "mixture": "I",
+      "points": [
+        {
+          "concentration": 0.0,
+          "mean": 18.68776334,
+          "sd": 1.991732093,
+          "reportedRsd": 10.65794797,
+          "label": "blank icp HNO3 1%"
+        },
+        {
+          "concentration": 0.01,
+          "mean": 118.5550516,
+          "sd": 3.755855193,
+          "reportedRsd": 3.168026282,
+          "label": "Mixture I 0.01 ppm"
+        },
+        {
+          "concentration": 0.1,
+          "mean": 924.7220492,
+          "sd": 5.144867809,
+          "reportedRsd": 0.556369107,
+          "label": "Mixture 0.1 ppm"
+        },
+        {
+          "concentration": 1.0,
+          "mean": 9692.948143,
+          "sd": 9.050086068,
+          "reportedRsd": 0.093367734,
+          "label": "Mixture I 1 ppm"
+        }
+      ],
+      "baseline": 18.68776334,
+      "referenceSlope": 9986.728825999999,
+      "referenceRsd": 0.0009336773430007198,
+      "referenceBlankSd": 1.991732093,
+      "measuredMax": 1.0,
+      "measuredMin": 0.01,
+      "compressionRatio": 0.9687116320284475,
+      "description": "Cu 324.754 (Aqueous-Axial-iFR); mixture I, measured positive range 0.01–1 ppm. No greater than 10% endpoint response compression is observed across the measured positive standards."
+    },
+    {
+      "id": "cu-327396-axial-ifr",
+      "element": "Cu",
+      "wavelength": 327.396,
+      "view": "Axial",
+      "mode": "iFR",
+      "mixture": "I",
+      "points": [
+        {
+          "concentration": 0.0,
+          "mean": -11.20419917,
+          "sd": 2.10420493,
+          "reportedRsd": 18.78050271,
+          "label": "blank icp HNO3 1%"
+        },
+        {
+          "concentration": 0.01,
+          "mean": 47.8191567,
+          "sd": 2.73175554,
+          "reportedRsd": 5.71268029,
+          "label": "Mixture I 0.01 ppm"
+        },
+        {
+          "concentration": 0.1,
+          "mean": 514.9957795,
+          "sd": 2.353684195,
+          "reportedRsd": 0.457029803,
+          "label": "Mixture 0.1 ppm"
+        },
+        {
+          "concentration": 1.0,
+          "mean": 5606.096988,
+          "sd": 11.8135971,
+          "reportedRsd": 0.210727662,
+          "label": "Mixture I 1 ppm"
+        }
+      ],
+      "baseline": -11.20419917,
+      "referenceSlope": 5902.3355870000005,
+      "referenceRsd": 0.0021072766178122353,
+      "referenceBlankSd": 2.10420493,
+      "measuredMax": 1.0,
+      "measuredMin": 0.01,
+      "compressionRatio": 0.9517082016722679,
+      "description": "Cu 327.396 (Aqueous-Axial-iFR); mixture I, measured positive range 0.01–1 ppm. No greater than 10% endpoint response compression is observed across the measured positive standards."
+    },
+    {
+      "id": "ti-334941-axial-ifr",
+      "element": "Ti",
+      "wavelength": 334.941,
+      "view": "Axial",
+      "mode": "iFR",
+      "mixture": "II",
+      "points": [
+        {
+          "concentration": 0.0,
+          "mean": 0.710067192,
+          "sd": 1.988058066,
+          "reportedRsd": 279.981682,
+          "label": "blank icp HNO3 1%"
+        },
+        {
+          "concentration": 0.05,
+          "mean": 1349.980642,
+          "sd": 4.685631311,
+          "reportedRsd": 0.347088778,
+          "label": "Mixture II 0.05 ppm HCL 1%"
+        },
+        {
+          "concentration": 0.1,
+          "mean": 2735.344055,
+          "sd": 21.10600993,
+          "reportedRsd": 0.771603481,
+          "label": "Mixture II 0.1 ppm HCL 1%"
+        }
+      ],
+      "baseline": 0.710067192,
+      "referenceSlope": 26985.41149616,
+      "referenceRsd": 0.007716034804257923,
+      "referenceBlankSd": 1.988058066,
+      "measuredMax": 0.1,
+      "measuredMin": 0.05,
+      "compressionRatio": 1.0133749445314688,
+      "description": "Ti 334.941 (Aqueous-Axial-iFR); mixture II, measured positive range 0.05–0.1 ppm. No greater than 10% endpoint response compression is observed across the measured positive standards."
+    },
+    {
+      "id": "ti-336121-axial-ifr",
+      "element": "Ti",
+      "wavelength": 336.121,
+      "view": "Axial",
+      "mode": "iFR",
+      "mixture": "II",
+      "points": [
+        {
+          "concentration": 0.0,
+          "mean": 0.705553339,
+          "sd": 1.157233326,
+          "reportedRsd": 164.017837,
+          "label": "blank icp HNO3 1%"
+        },
+        {
+          "concentration": 0.05,
+          "mean": 706.2236129,
+          "sd": 3.691578473,
+          "reportedRsd": 0.522720907,
+          "label": "Mixture II 0.05 ppm HCL 1%"
+        },
+        {
+          "concentration": 0.1,
+          "mean": 1416.913984,
+          "sd": 7.800445118,
+          "reportedRsd": 0.550523546,
+          "label": "Mixture II 0.1 ppm HCL 1%"
+        }
+      ],
+      "baseline": 0.705553339,
+      "referenceSlope": 14110.361191220001,
+      "referenceRsd": 0.005505235466714118,
+      "referenceBlankSd": 1.157233326,
+      "measuredMax": 0.1,
+      "measuredMin": 0.05,
+      "compressionRatio": 1.0036656124311107,
+      "description": "Ti 336.121 (Aqueous-Axial-iFR); mixture II, measured positive range 0.05–0.1 ppm. No greater than 10% endpoint response compression is observed across the measured positive standards."
+    },
+    {
+      "id": "ca-396847-radial-ifr",
+      "element": "Ca",
+      "wavelength": 396.847,
+      "view": "Radial",
+      "mode": "iFR",
+      "mixture": "III",
+      "points": [
+        {
+          "concentration": 0.0,
+          "mean": 449.6454462,
+          "sd": 2.373019683,
+          "reportedRsd": 0.527753523,
+          "label": "blank icp HNO3 1%"
+        },
+        {
+          "concentration": 25.0,
+          "mean": 1108838.549,
+          "sd": 5773.428819,
+          "reportedRsd": 0.52067353,
+          "label": "Mixture III 25 ppm"
+        },
+        {
+          "concentration": 50.0,
+          "mean": 2035802.544,
+          "sd": 16631.27027,
+          "reportedRsd": 0.816939262,
+          "label": "MIxture III 50 ppm"
+        },
+        {
+          "concentration": 100.0,
+          "mean": 3467297.191,
+          "sd": 10534.02299,
+          "reportedRsd": 0.30381079,
+          "label": "MIxture III 100 ppm"
+        }
+      ],
+      "baseline": 449.6454462,
+      "referenceSlope": 44335.55614215201,
+      "referenceRsd": 0.0030381079006849975,
+      "referenceBlankSd": 2.373019683,
+      "measuredMax": 100.0,
+      "measuredMin": 25.0,
+      "compressionRatio": 0.7819564808069919,
+      "description": "Ca 396.847 (Aqueous-Radial-iFR); mixture III, measured positive range 25–100 ppm. Measured high-level response is compressed relative to the lowest measured positive standard; the export does not establish detector saturation."
+    }
+  ]
+}

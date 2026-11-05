@@ -21,9 +21,10 @@ test('self-contained HTML supports real offline acquisition and CSV export', asy
   await expect(page.getByRole('heading', { name: 'Calibration workspace.' })).toBeVisible();
   await page.getByRole('link', { name: 'Rosen Academy home' }).click();
   await expect(page).toHaveURL(simulatorURL + '#top');
-  await page.getByLabel('Response model', { exact: true }).selectOption('linear');
+  await expect(page.getByLabel('Response model', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('Reference exposure', { exact: true })).toHaveValue('5 s');
   await page.getByRole('button', { name: 'Run calibration', exact: true }).click();
-  await expect(page.getByText('6/6 measured', { exact: true })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByText('4/4 measured', { exact: true })).toBeVisible({ timeout: 15000 });
   await expect(page.getByRole('button', { name: 'Run calibration', exact: true })).toBeVisible();
   await expect(page.locator('.standards-table tbody tr').last().locator('td').nth(3)).not.toHaveText('—');
   const means = await page.locator('.standards-table tbody tr td:nth-child(4)').allTextContents();
@@ -35,7 +36,7 @@ test('self-contained HTML supports real offline acquisition and CSV export', asy
   await page.getByRole('button', { name: 'Export CSV', exact: true }).click();
   expect((await downloadPromise).suggestedFilename()).toMatch(/calibration\.csv$/);
   await page.reload();
-  await expect(page.getByText('6/6 measured', { exact: true })).toBeVisible();
+  await expect(page.getByText('4/4 measured', { exact: true })).toBeVisible();
   expect(await page.locator('.standards-table tbody tr td:nth-child(4)').allTextContents()).toEqual(means);
   expect(errors).toEqual([]);
   expect(requests).toEqual([]);

@@ -1898,3 +1898,54 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .solution-button { background: transparent; }
 /* Keep foreground/background pairs stable instead of fading through gray. */
 button { transition: none; }
+
+/* Measured-method metadata and calibration equation reference. */
+.reference-method {
+  border: 1px solid #000;
+  padding: 12px;
+  margin-bottom: 18px;
+  font-size: 14px;
+  line-height: 1.65;
+}
+.reference-method strong { display: block; margin-bottom: 8px; }
+.reference-method p { margin: 8px 0; }
+.reference-exposure {
+  display: block;
+  width: 100%;
+  padding: 11px 9px;
+  font: inherit;
+  font-size: 14px;
+  background: #fff;
+  color: #000;
+  border: 1.5px solid #000;
+  border-radius: 3px;
+}
+.formula-explainer { margin: 0 22px 18px; font-size: 14px; line-height: 1.6; }
+.formula-explainer>strong { font-family: var(--terminal-font); font-size: 19px; }
+.formula-explainer dl { margin: 12px 0; }
+.formula-explainer dl>div { display: flex; gap: 12px; margin: 6px 0; }
+.formula-explainer dt { width: 20px; flex-shrink: 0; font-family: var(--terminal-font); font-weight: 700; }
+.formula-explainer dd { margin: 0; }
+.formula-explainer p { margin: 10px 0; }
+.support-label { display: block; margin: 5px 0 0 16px; font-size: 11px; line-height: 1.5; }
+.support-label.extrapolated { display: inline-block; background: #ffd43b; color: #000; border: 1px solid #000; padding: 1px 4px; }
+.source-warning { display: flex; align-items: flex-start; gap: 9px; padding: 12px 16px; border: 1px solid #000; background: #ffd43b; color: #000; font-size: 14px; line-height: 1.6; }
+.source-warning svg { flex-shrink: 0; margin-top: 3px; }
+@media(max-width:850px) {
+  .reference-method { grid-column: 1; grid-row: 3 / 7; margin: 0; }
+  .method-body>.two-fields { grid-column: 1 / -1; grid-row: 8; }
+  .method-body>.fine-print { grid-column: 1 / -1; grid-row: 9; }
+  .method-body>.line-description { grid-column: 2; grid-row: 7; }
+}
+@media(max-width:600px) {
+  .reference-method { font-size: 13px; padding: 12px; }
+  .reference-exposure { font-size: 14px; }
+  .formula-explainer { margin: 0 18px 18px; }
+  .support-label { font-size: 11px; }
+  .method-body { grid-template-columns: minmax(0,1fr); align-items: start; }
+  .method-body>* { grid-column: 1 / -1 !important; grid-row: auto !important; }
+  .line-options { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+  .method-body>.line-description { margin-bottom: 6px; }
+  .replicate-summary { grid-template-columns: repeat(2,minmax(0,1fr)); row-gap: 14px; }
+  .replicate-summary strong { white-space: nowrap; overflow-wrap: normal; }
+}

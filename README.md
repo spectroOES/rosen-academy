@@ -71,21 +71,21 @@ Download `dist/rosen-academy.html` and open it directly in Chrome, Edge, or Fire
 
 ## First experiment
 
-1. Click **Load demo** to acquire example measurements immediately, or **Run calibration** to watch sequential acquisition.
+1. In a fresh session, start with **Cu 324.754 Axial iFR**. Its four method levels load automatically: the blank, **0.01, 0.1, and 1 ppm**. Click **Load demo** for immediate simulated readings, or **Run calibration** to watch sequential acquisition.
 2. Compare **None**, **1/x**, **1/x²**, **1/SD²**, and **1/RSD²** weighting without regenerating measurements. Inspect back-calculated concentration errors as well as R².
-3. Exclude the 100 ppm standard with its checkbox and compare the fit. Measurements are retained.
-4. Select a less sensitive analytical line and acquire a new calibration. Changing the line, response model, or integration time clears readings to avoid mixing incompatible measurements.
+3. Select **Mg 280.270 Axial iFR** and acquire its blank, **25, 50, and 100 ppm** standards. Its recorded high-level response is compressed. Exclude the **100 ppm** standard with its checkbox and compare the fit; the readings are retained.
+4. Compare **Mg 279.079 Radial iFR**, a weaker channel with much less recorded compression over the same levels. Changing the channel loads its own source levels and clears incompatible readings. Response follows the selected channel's data; exposure stays at **5 s**.
 5. Use **Log x** to inspect the concentration range. The zero-concentration blank is hidden on this axis, but its regression inclusion remains unchanged.
 6. Acquire **10 blank readings** to estimate instrumental LOD and LOQ. Export the session using **Export CSV**.
 
 ## Included
 
-- Cu, Cd, Pb, Fe, and Zn, each with three selectable analytical lines.
-- Editable standards from **0.01 to 100 ppm**, plus a zero-concentration calibration blank. Here ppm denotes mg/L in the simulated aqueous solutions.
-- Linear response, detector compression/saturation, and smoothly curved response.
-- 3, 5, or 10 repeat measurements; 1, 5, or 10 s integration with accelerated acquisition playback.
+- **25 measured channels for 10 elements:** Cu, Cd, Mg, Ca, P, Pb, Ti, Zn, Fe, and Sb. Each channel retains its exported wavelength, **Axial/Radial** view, and **iFR/eUV** mode.
+- Source standard levels load for each channel: **0, 0.01, 0.1, 1 ppm** for Mixture I; **0, 0.05, 0.1 ppm** for Mixture II; **0, 25, 50, 100 ppm** for Mixture III. Standards remain editable from **0.01 to 100 ppm**, plus the zero blank. Here ppm denotes mg/L in the simulated aqueous solutions.
+- Channel response and precision based on the uploaded method's measured mean intensities and SDs. Added levels are labelled **Reference level**, **Interpolated**, or **Extrapolated** according to their source support.
+- **3, 5, or 10 simulated repeat readings**, fixed **5 s** reference exposure, and accelerated acquisition playback.
 - Standard means, sample SD, RSD, weighted linear regression with a free or legacy blank-fixed intercept, back-calculated concentrations, and error plots.
-- Optional display of the underlying synthetic response curve, distinct from the fitted straight line.
+- A reference response curve defined by the imported means, distinct from the fitted calibration line, and a calibration equation with variable explanations.
 - Red **±1 sample SD** bars on measured calibration points, including blank anchors and excluded measurements when visible. One reading has no estimable SD. The concentration-error graph propagates replicate SD through the fixed fitted line; calibration-parameter uncertainty is not included.
 - Browser-local session persistence and CSV export containing raw replicate data and calculation metadata.
 - Locally bundled fonts: no remote font or analytics requests.
@@ -99,17 +99,25 @@ On the concentration-error graph, the red bar half-width is `100 * SD_signal / (
 
 ## Scientific model and limitations
 
-**All measurements and response coefficients are synthetic.** The wavelength identifiers correspond to analytical lines, but sensitivity rankings, noise, compression, and curvature coefficients are teaching choices, not specifications for a particular instrument. Only the selected line is acquired in this prototype; it does not simulate simultaneous multi-line acquisition or a scanned spectrum.
+**Reference means and SDs are measured; new replicate readings are simulated.** The source is the supplied calibration CSV from a **Thermo iCAP PRO Duo ICP-OES**. The user confirmed that `Mixture 0.1 ppm` belongs to Mixture I and that every acquisition mode used **5 s exposure**. The imported dataset contains 96 mean/SD/RSD point triplets across 25 channels. See the [data provenance and response report](docs/calibration-data-report.md) for all channel ranges, sensitivity comparisons, and limitations.
 
-With concentration `C`, sensitivity `b`, ceiling `S`, and negative curvature coefficient `q`, expected background-corrected intensity is:
+At an exported concentration, the expected signal equals that channel's recorded mean. Between reference levels, **piecewise linear interpolation** connects the means, including the measured blank. Above the last reference level, the last segment's slope continues as **last-secant extrapolation**. The UI labels added levels and warns when they exceed the measured maximum. Extrapolated responses are unverified; for example, the Cd measurements stop at 1 ppm and do not establish its response at 100 ppm. Relative sensitivity compares the blank-to-first-standard slopes within this method, rather than claiming a universal ranking of emission lines.
 
-- Linear: `b C`.
-- Saturation: `S (1 − exp(−b C / S))`.
-- Curvature: `b C (1 + q C)` within the supported concentration range.
+The measured Mg channels show different degrees of high-level response compression. The user confirmed that those high-level Mg results remained numeric and **had no saturation flag in Qtegra**. They remain numeric reference points in the simulator. Their curvature does not establish detector saturation, a universal cps ceiling, or the onset of a validated nonlinear range. There is no manual Linear/Saturation outcome selector and no invented detector clipping threshold.
 
-The nonlinear modes generate nonlinear instrument response; the calibration remains a **linear regression**, deliberately exposing bias when a straight line is applied over an unsuitable range. There is no polynomial/nonlinear fitting in this version.
+Simulated replicates are independent, seeded Gaussian draws around the reference response. At reference levels their generating SD is the exported intensity SD; between levels SD is linearly interpolated. Above the measured range, the model retains the final standard's relative precision, with blank SD as a floor. It adds no separate electronic, photon, or proportional noise to those measured SDs. A repeated seed reproduces the same readings; new acquisitions advance the seed. The resulting sample mean and SD vary around the source values and are not a reconstruction of the instrument's original replicates. Exposure is fixed at the confirmed 5 s, so the UI makes no exposure-dependent detector prediction.
 
-Replicates use seeded Gaussian noise combining electronic, photon/background, and proportional contributions, scaled by `1 / sqrt(integration time)`. Net blank signals may be negative. Blank RSD is normally labelled **n/a**, because percentages around zero are not informative. In **1/RSD²** mode its calculated numerical value is shown with **†**, because it contributes to the selected weighting; the warning about instability remains visible.
+The calibration remains a **linear regression**, so fitting a straight line across a compressed response exposes concentration bias. Its displayed equation is **`I = b + m × C`**, where `I` is mean intensity in cps, `C` is concentration in ppm, `m` is the slope in cps/ppm, and `b` is the intercept in cps. The inverse is **`C = (I − b) / m`**. In legacy concentration weighting, `b` is fixed to the acquired blank mean. Weighting cannot remove physical response compression, and there is no polynomial/nonlinear fitting in this version.
+
+Blank signals may be negative. Blank RSD is normally labelled **n/a**, because percentages around zero are not informative. In **1/RSD²** mode its calculated numerical value is shown with **†**, because it contributes to the selected weighting; the warning about instability remains visible. The only exported blank is labelled 1% HNO3 while Mixture II standards are labelled 1% HCl, which limits interpretation of the latter's blank-corrected response. Only the selected channel is acquired; simultaneous multi-line acquisition and scanned spectra are not implemented.
+
+Reproduce the selected-channel JSON and report from the original CSV with Python's standard library:
+
+```sh
+python3 scripts/import-calibration.py '/path/to/261028-29  CALIBRATION CPS for Simulator.csv'
+```
+
+The raw export is not committed. The generated [channel profiles](src/data/calibration-profiles.json) preserve the relevant measured values and the source file's SHA-256 hash.
 
 Regression uses each included standard's mean as an observation and minimizes `sum(w_i * (mean_signal_i − intercept − slope * concentration_i)^2)`. Unconstrained fits require at least three distinct included, measured concentrations. Legacy concentration-weighted fits require an included measured blank plus at least two distinct nonzero measured concentrations.
 
@@ -119,11 +127,11 @@ Regression uses each included standard's mean as an observation and minimizes `s
 | 1/x | `1 / concentration` |
 | 1/x² | `1 / concentration²` |
 | 1/SD² | `1 / SD²`, with SD the replicate sample SD in cps |
-| 1/RSD² | `1 / (SD / abs(mean net intensity))² = (100 / RSD%)²` |
+| 1/RSD² | `1 / (SD / abs(mean intensity))² = (100 / RSD%)²` |
 
 For **1/x and 1/x²**, the documented **Qtegra legacy** behavior is used: the measured included blank mean fixes the intercept (**Forcing = Blank**), the blank has no numeric weight, and only nonzero standards enter the weighted slope calculation. The blank Weight cell displays **ANCHOR**. No substitute concentration is used. Missing, excluded, unmeasured or ambiguous blanks produce a clear error. The slope is `sum(w*c*(mean_signal − blank_mean)) / sum(w*c²)`. Other options retain a free intercept. For precision modes, each included measured standard requires at least two replicates and a finite, positive sample SD (`n − 1` denominator). **1/RSD²** additionally requires a nonzero measured mean. Undefined weights produce an explicit error: the simulator does not drop the standard, invent a floor, or revert to an unweighted fit. The user can acquire valid readings or explicitly exclude that standard.
 
-Precision weights follow Qtegra Absolute SD and Relative SD: **1/SD²** and **1/(SD/abs(mean))²**. SD is the sample SD of replicate net intensity, not the standard error of the mean. The displayed RSD is a percentage, whereas weighting uses fractional relative SD: `w = (100/RSD%)²`. Raw relative weights are therefore 10000 times `1/(RSD%)²`; that common scale does not change the fitted curve. A nonzero observed blank mean permits a relative-variance coefficient, but this coefficient is unstable near zero. Raw coefficients are shown in the **Weight** column and CSV; the regression rescales all weights by one common factor for numerical stability. Existing browser sessions using the old unsquared options migrate to the corresponding squared option while preserving all readings.
+Precision weights follow Qtegra Absolute SD and Relative SD: **1/SD²** and **1/(SD/abs(mean))²**. SD is the sample SD of replicate intensity, not the standard error of the mean. The displayed RSD is a percentage, whereas weighting uses fractional relative SD: `w = (100/RSD%)²`. Raw relative weights are therefore 10000 times `1/(RSD%)²`; that common scale does not change the fitted curve. A nonzero observed blank mean permits a relative-variance coefficient, but this coefficient is unstable near zero. Raw coefficients are shown in the **Weight** column and CSV; the regression rescales all weights by one common factor for numerical stability. Earlier fully synthetic sessions remain stored separately. Measured-method sessions are restored only when their source file and selected channel match this release.
 
 **Vendor-algorithm status:** legacy inverse-concentration weighting and automatic blank forcing are verified against the supplied Qtegra manual and the 2.25 change notes. See [source references, formulas and scope](docs/qtegra-legacy-calibration.md). The precision weights also follow the squared definitions in Qtegra Algorithms Table 4-2 (PDF38 / printed4-10). The simulator does not claim complete historical Qtegra statistics compatibility.
 
@@ -155,6 +163,9 @@ Playwright uses system Chromium at `/usr/bin/chromium`. Set `CHROMIUM_PATH` if i
 - `streamlit_runtime.py` — verified release loading, source hashing, and build caching.
 - `streamlit_assets/` — committed self-contained deployment bundle; regenerate with `npm run build:streamlit`.
 - `src/lib/model.ts` — instrument response, reproducible acquisition, statistics, and calibration fitting.
+- `src/data/calibration-profiles.json` — selected-channel measured means, SDs, and source provenance.
+- `scripts/import-calibration.py` — reproducible import from the original Qtegra CSV.
+- `docs/calibration-data-report.md` — measured channel ranges, response comparisons, and model limitations.
 - `src/App.tsx` — instrument workflow, standards, session persistence, and export.
 - `src/components/CalibrationCharts.tsx` — interactive SVG calibration and concentration-error plots.
 - `src/lib/model.test.ts` — numerical and scientific behavior checks.

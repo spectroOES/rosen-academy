@@ -1,11 +1,14 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 
-const KEY = 'rosen-calibration-v1';
+const methodData = JSON.parse(readFileSync(new URL('../src/data/calibration-profiles.json', import.meta.url), 'utf8'));
+
+const KEY = 'rosen-calibration-v2-measured';
 const blankReadings = [1, 3, 1, 3, 1, 3, 1, 3, 1, 3];
 const fixture = {
-  lineId: 'cu-324754', mode: 'linear', weighting: 'none', replicates: 3, integration: 5, sequence: 1,
+  sourceHash: methodData.source.sha256, lineId: 'cu-324754-axial-ifr', mode: 'measured', weighting: 'none', replicates: 3, integration: 5, sequence: 1,
   standards: [
     { id: 'b', name: 'Calibration blank', concentration: 0, included: true, readings: blankReadings },
     { id: 's1', name: 'Standard 1', concentration: 1, included: true, readings: [4, 5, 6] },

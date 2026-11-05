@@ -1,10 +1,36 @@
+import calibrationData from '../data/calibration-profiles.json';
+
 /**
- * Transparent educational ICP-OES model. Wavelengths identify real analytical
- * lines; every response coefficient below is synthetic, not instrument data.
+ * Transparent educational ICP-OES model. METHOD_LINES use exported instrument
+ * means and SDs; LINES retain the earlier synthetic teaching examples.
  * Signals are background-corrected intensity rates in counts per second.
  */
-export type ResponseMode = 'linear' | 'saturation' | 'curvature';
+export type ResponseMode = 'linear' | 'saturation' | 'curvature' | 'measured';
 export type Weighting = 'none' | '1/x' | '1/x2' | '1/SD2' | '1/RSD2';
+
+export interface MeasuredProfile {
+  id: string;
+  element: string;
+  wavelength: number;
+  view: 'Axial' | 'Radial';
+  mode: 'iFR' | 'eUV';
+  mixture: 'I' | 'II' | 'III';
+  points: {
+    concentration: number;
+    mean: number;
+    sd: number;
+    reportedRsd: number | null;
+    label: string;
+  }[];
+  baseline: number;
+  referenceSlope: number;
+  referenceRsd: number;
+  referenceBlankSd: number;
+  measuredMin: number;
+  measuredMax: number;
+  compressionRatio: number;
+  description: string;
+}
 
 export interface SpectralLine {
   id: string;
@@ -17,6 +43,10 @@ export interface SpectralLine {
   label: string;
   description: string;
   recommendedMax: number;
+  profile?: MeasuredProfile;
+  view?: MeasuredProfile['view'];
+  acquisitionMode?: MeasuredProfile['mode'];
+  mixture?: MeasuredProfile['mixture'];
 }
 
 export const ELEMENTS = ['Cu', 'Cd', 'Pb', 'Fe', 'Zn'];
@@ -38,6 +68,39 @@ export const LINES: SpectralLine[] = [
   { id: 'zn-206200', element: 'Zn', wavelength: 206.200, sensitivity: 28000, background: 2000, saturation: 1600000, curvature: -0.002, label: 'Medium sensitivity', description: 'Moderate response for a wider calibration range.', recommendedMax: 10 },
   { id: 'zn-202548', element: 'Zn', wavelength: 202.548, sensitivity: 4800, background: 1400, saturation: 2400000, curvature: -0.0006, label: 'Low sensitivity', description: 'Lower response for high-concentration calibration exercises.', recommendedMax: 100 },
 ];
+
+const methodProfiles = calibrationData.profiles as MeasuredProfile[];
+const preferredMethodElements = ['Cu', 'Cd', 'Mg', 'Ca', 'P', 'Pb', 'Ti', 'Zn', 'Fe', 'Sb'];
+export const METHOD_ELEMENTS = preferredMethodElements.filter((element) => methodProfiles.some((profile) => profile.element === element));
+
+/**
+ * Method channels retain exact wavelength, geometry and acquisition mode.
+ * Relative response compares blank-to-first-standard slopes within an element;
+ * it is a property of this measured method, not a universal line ranking.
+ * No detector saturation ceiling can be inferred from the numeric export.
+ */
+export const METHOD_LINES: SpectralLine[] = methodProfiles.map((profile) => {
+  const strongest = Math.max(...methodProfiles.filter((candidate) => candidate.element === profile.element).map((candidate) => candidate.referenceSlope));
+  const relativeResponse = 100 * profile.referenceSlope / strongest;
+  const responseLabel = relativeResponse > 0 && relativeResponse < 1 ? relativeResponse.toFixed(2) : relativeResponse.toFixed(0);
+  return {
+    id: profile.id,
+    element: profile.element,
+    wavelength: profile.wavelength,
+    sensitivity: profile.referenceSlope,
+    background: 0,
+    saturation: Number.POSITIVE_INFINITY,
+    curvature: 0,
+    label: `${responseLabel}% relative response`,
+    description: `${profile.description} Initial measured response: ${profile.referenceSlope.toPrecision(4)} cps/ppm (${relativeResponse.toFixed(1)}% of the strongest selected ${profile.element} channel).`,
+    recommendedMax: profile.measuredMax,
+    profile,
+    view: profile.view,
+    acquisitionMode: profile.mode,
+    mixture: profile.mixture,
+  };
+}).sort((a, b) => METHOD_ELEMENTS.indexOf(a.element) - METHOD_ELEMENTS.indexOf(b.element)
+  || a.wavelength - b.wavelength || a.id.localeCompare(b.id));
 
 export interface Standard {
   id: string;
@@ -110,7 +173,7 @@ export interface WeightResult {
 
 /**
  * Inspect included, measured standards without modifying their readings.
- * SD is sample SD of replicate net intensities (n - 1 denominator), in cps.
+ * SD is sample SD of replicate intensities (n - 1 denominator), in cps.
  * RSD diagnostics are 100 * SD / abs(mean), in percent. Qtegra precision weights
  * are 1/SD² and 1/(SD/abs(mean))², respectively. The relative weight therefore
  * equals (100 / RSDpercent)², not 1/RSDpercent². No blank exception or numerical
@@ -133,9 +196,9 @@ export function calculateWeights(standards: Standard[], weighting: Weighting): W
       return point;
     };
     if (!Number.isFinite(standard.concentration) || standard.concentration < 0) return fail('concentration must be finite and nonnegative.');
-    if (standard.readings.some((value) => !Number.isFinite(value))) return fail('all replicate net intensities must be finite.');
+    if (standard.readings.some((value) => !Number.isFinite(value))) return fail('all replicate intensities must be finite.');
     const average = mean(standard.readings);
-    if (!Number.isFinite(average)) return fail('the mean replicate net intensity must be finite.');
+    if (!Number.isFinite(average)) return fail('the mean replicate intensity must be finite.');
     if (standard.readings.length > 1) {
       const deviation = sd(standard.readings);
       if (!Number.isFinite(deviation)) return fail('the replicate SD must be finite.');
@@ -153,7 +216,7 @@ export function calculateWeights(standards: Standard[], weighting: Weighting): W
     if (precision) {
       if (standard.readings.length < 2) return fail(`${weightingLabel} weighting requires at least 2 replicate readings.`);
       if (point.sd === null || point.sd <= 0) return fail(`${weightingLabel} weighting requires a positive replicate SD.`);
-      if (weighting === '1/RSD2' && average === 0) return fail('1/RSD² weighting requires a nonzero mean net intensity.');
+      if (weighting === '1/RSD2' && average === 0) return fail('1/RSD² weighting requires a nonzero mean intensity.');
       point.weight = weighting === '1/SD2' ? (1 / point.sd) ** 2 : (Math.abs(average) / point.sd) ** 2;
     } else if (weighting === 'none') {
       point.weight = 1;
@@ -257,9 +320,56 @@ export function fitCalibration(standards: Standard[], weighting: Weighting): Fit
   };
 }
 
-/** Expected net intensity, before random acquisition noise. */
-export function expectedSignal(concentration: number, line: SpectralLine, mode: ResponseMode): number {
+function validateConcentration(concentration: number): void {
   if (!Number.isFinite(concentration) || concentration < 0) throw new RangeError('Concentration must be finite and nonnegative.');
+}
+
+/** Interpolate reference values; the final secant continues beyond the export. */
+function measuredValue(concentration: number, profile: MeasuredProfile, key: 'mean' | 'sd'): number {
+  const exact = profile.points.find((point) => point.concentration === concentration);
+  if (exact) return exact[key];
+  const upperIndex = profile.points.findIndex((point) => point.concentration > concentration);
+  if (upperIndex === 0) return profile.points[0][key];
+  const right = profile.points[upperIndex < 0 ? profile.points.length - 1 : upperIndex];
+  const left = profile.points[upperIndex < 0 ? profile.points.length - 2 : upperIndex - 1];
+  return left[key] + (right[key] - left[key]) * (concentration - left.concentration) / (right.concentration - left.concentration);
+}
+
+/**
+ * Reference support for the expected mean, not an assertion of a validated
+ * linear range. Blank-to-first-standard gaps also count as interpolation.
+ */
+export function describeRange(concentration: number, line: SpectralLine): 'measured' | 'interpolated' | 'extrapolated' {
+  validateConcentration(concentration);
+  if (!line.profile) return 'extrapolated';
+  const points = line.profile.points;
+  if (points.some((point) => point.concentration === concentration)) return 'measured';
+  return concentration > points[0].concentration && concentration < points[points.length - 1].concentration ? 'interpolated' : 'extrapolated';
+}
+
+/**
+ * Exported replicate SD at reference exposure, linearly interpolated between
+ * standards. Above the measured range, retain the last relative precision,
+ * with the exported blank SD as a floor. This is a modelling assumption.
+ */
+export function measuredSD(concentration: number, line: SpectralLine): number {
+  validateConcentration(concentration);
+  if (!line.profile) throw new RangeError('Measured SD requires an imported calibration profile.');
+  const profile = line.profile;
+  const last = profile.points[profile.points.length - 1];
+  if (concentration <= last.concentration) return measuredValue(concentration, profile, 'sd');
+  const signal = measuredValue(concentration, profile, 'mean');
+  return Math.max(profile.referenceBlankSd, last.sd * Math.abs(signal) / Math.max(Math.abs(last.mean), 1e-9));
+}
+
+/**
+ * Expected intensity before random acquisition noise. Imported channels
+ * always follow measured means, including their nonzero blank. Straight-line
+ * segments preserve observed compression; extrapolation adds no saturation.
+ */
+export function expectedSignal(concentration: number, line: SpectralLine, mode: ResponseMode): number {
+  validateConcentration(concentration);
+  if (line.profile) return measuredValue(concentration, line.profile, 'mean');
   const ideal = line.sensitivity * concentration;
   if (mode === 'saturation') return -line.saturation * Math.expm1(-ideal / line.saturation);
   if (mode === 'curvature') return ideal * Math.max(0, 1 + line.curvature * concentration);
@@ -278,16 +388,21 @@ function seededRandom(seed: number): () => number {
 }
 
 /**
- * Synthetic independent replicates. Electronic noise, photon noise from
- * analyte + removed background, and proportional noise scale with 1/sqrt(t).
- * Background subtraction allows small negative blank signals.
+ * Synthetic independent Gaussian replicates, not the instrument's raw runs.
+ * Imported channels use the exported SD without adding electronic, photon or
+ * proportional noise a second time. Their reference exposure is 5 s; an
+ * optional 1/sqrt(t) precision scaling is a noise-only teaching assumption and
+ * does not change the measured response curve or predict detector saturation.
+ * Legacy channels keep their synthetic electronic/photon/proportional model.
  */
 export function measureStandard(concentration: number, line: SpectralLine, mode: ResponseMode, replicates: number, integration: number, seed: number): number[] {
   if (!Number.isInteger(replicates) || replicates < 1 || replicates > 1000) throw new RangeError('Replicates must be an integer from 1 to 1000.');
   if (!Number.isFinite(integration) || integration <= 0) throw new RangeError('Integration time must be positive.');
   if (!Number.isFinite(seed)) throw new RangeError('Seed must be finite.');
   const signal = expectedSignal(concentration, line, mode);
-  const sigma = Math.sqrt(4 ** 2 + Math.abs(signal) + line.background + (0.003 * Math.abs(signal)) ** 2) / Math.sqrt(integration);
+  const sigma = line.profile
+    ? measuredSD(concentration, line) * Math.sqrt(calibrationData.source.referenceExposureSeconds / integration)
+    : Math.sqrt(4 ** 2 + Math.abs(signal) + line.background + (0.003 * Math.abs(signal)) ** 2) / Math.sqrt(integration);
   const random = seededRandom(seed);
   return Array.from({ length: replicates }, () => {
     const u = Math.max(random(), Number.MIN_VALUE);

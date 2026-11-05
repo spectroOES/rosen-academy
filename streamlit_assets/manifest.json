@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "sourceHash": "820205a1141d71a069ddbb9eaff3f3f72116433fe5f23e452efad140c9249ba3",
+  "sourceHash": "20ef309a6ff286e9dc081ba43b9c01dfdda0edc8605dcf41943fff46f6202e47",
   "sourceFiles": [
     "index.html",
     "package-lock.json",
@@ -10,6 +10,8 @@
     "scripts/export-streamlit.mjs",
     "src/App.tsx",
     "src/components/CalibrationCharts.tsx",
+    "src/data/calibration-profiles.json",
+    "src/lib/empirical.test.ts",
     "src/lib/model.test.ts",
     "src/lib/model.ts",
     "src/main.tsx",
@@ -17,7 +19,7 @@
     "tsconfig.json",
     "vite.config.ts"
   ],
-  "artifactHash": "25a09e62f0609b813ac0c79b8e69438ace55904ddd3cabddb87c7ac98fa90d8f",
+  "artifactHash": "4c8621837aa2695aadc35110796a383a1ad92e0d84643cb63feb558d4e752298",
   "artifact": "index.html",
-  "sizeBytes": 501013
+  "sizeBytes": 529789
 }
